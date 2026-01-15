@@ -1,7 +1,7 @@
 package main
 
 import (
-	devopsctlcmd "devopsctl/internal/cmd"
+	devctlcmd "devctl/internal/cmd"
 	"errors"
 	"log/slog"
 	"os"
@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	cmd, err := devopsctlcmd.NewCmdRoot()
+	cmd, err := devctlcmd.NewCmdRoot()
 
 	if err != nil {
 		slog.Warn("command failed", slog.Any("error", err))
@@ -17,7 +17,7 @@ func main() {
 	}
 
 	if err := cmd.Execute(); err != nil {
-		var cerr *devopsctlcmd.CommandError
+		var cerr *devctlcmd.CommandError
 		if errors.As(err, &cerr) {
 			os.Exit(cerr.ExitCode)
 		}

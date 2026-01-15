@@ -1,17 +1,17 @@
-project_name: devopsctl
+project_name: devctl
 version: 2
 
 release:
   prerelease: auto
   draft: true
-  name_template: "DevOps CTL {{.Version}}"
+  name_template: "DEV CTL {{.Version}}"
 
 builds:
   - id: macOS #build:macOS
     goos: [ darwin ]
     goarch: [ amd64, arm64 ]
-    binary: bin/devopsctl
-    main: ./cmd/devopsctl
+    binary: bin/devctl
+    main: ./cmd/devctl
     ldflags:
       - -s -w
 
@@ -20,32 +20,32 @@ builds:
     goarch: [ arm, amd64, arm64 ]
     env:
       - CGO_ENABLED=0
-    binary: bin/devopsctl
-    main: ./cmd/devopsctl
+    binary: bin/devctl
+    main: ./cmd/devctl
     ldflags:
       - -s -w
 
   - id: windows #build:windows
     goos: [ windows ]
     goarch: [ amd64, arm64 ]
-    binary: bin/devopsctl
-    main: ./cmd/devopsctl
+    binary: bin/devctl
+    main: ./cmd/devctl
     ldflags:
       - -s -w
 
 archives:
   - id: linux-archive
     ids: [ linux ]
-    name_template: "devopsctl_{{ .Version }}_linux_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    name_template: "devctl_{{ .Version }}_linux_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     wrap_in_directory: true
     formats: [ 'tar.gz' ]
   - id: macOS-archive
     ids: [ macOS ]
-    name_template: "devopsctl_{{ .Version }}_macOS_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    name_template: "devctl_{{ .Version }}_macOS_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     wrap_in_directory: true
     formats: [ 'zip' ]
   - id: windows-archive
     ids: [ windows ]
-    name_template: "devopsctl_{{ .Version }}_windows_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    name_template: "devctl_{{ .Version }}_windows_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     wrap_in_directory: false
     formats: [ 'zip' ]

@@ -14,7 +14,7 @@ type EnvSettings struct {
 
 func New() *EnvSettings {
 	env := &EnvSettings{}
-	env.Debug, _ = strconv.ParseBool(os.Getenv("DEVOPSCTL_DEBUG"))
+	env.Debug, _ = strconv.ParseBool(os.Getenv("devctl_DEBUG"))
 
 	return env
 }

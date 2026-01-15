@@ -14,7 +14,7 @@ import (
 )
 
 var tasks = map[string]func(string) error{
-	"bin/devopsctl": func(exe string) error {
+	"bin/devctl": func(exe string) error {
 		info, err := os.Stat(exe)
 		if err == nil && !sourceFilesLaterThan(info.ModTime()) {
 			fmt.Printf("%s: `%s` is up to date.\n", self, exe)
@@ -27,7 +27,7 @@ var tasks = map[string]func(string) error{
 		if buildTags != "" {
 			args = append(args, "-tags", buildTags)
 		}
-		args = append(args, "-o", exe, "./cmd/devopsctl")
+		args = append(args, "-o", exe, "./cmd/devctl")
 
 		return run(args...)
 	},
@@ -50,9 +50,9 @@ func main() {
 
 	if len(args) < 2 {
 		if isWindowsTarget() {
-			args = append(args, filepath.Join("bin", "devopsctl.exe"))
+			args = append(args, filepath.Join("bin", "devctl.exe"))
 		} else {
-			args = append(args, "bin/devopsctl")
+			args = append(args, "bin/devctl")
 		}
 	}
 

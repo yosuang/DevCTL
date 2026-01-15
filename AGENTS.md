@@ -1,7 +1,7 @@
 ### STRUCTURE
 ```
-devopsctl/
-├── cmd/devopsctl/         # Application entry points
+devctl/
+├── cmd/devctl/            # Application entry points
 ├── internal/              # Private application code
 │   ├── cmd/               # Command implementations (Cobra)
 │   └── logging/           # Custom logging infrastructure

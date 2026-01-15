@@ -74,7 +74,7 @@ announce() {
 }
 
 trigger_deployment() {
-  announce gh workflow -R yosuang/devopsctl run deployment.yml --ref "$branch" -f tag_name="$tag_name" -f environment="$deploy_env"
+  announce gh workflow -R yosuang/devctl run deployment.yml --ref "$branch" -f tag_name="$tag_name" -f environment="$deploy_env"
 }
 
 build_local() {

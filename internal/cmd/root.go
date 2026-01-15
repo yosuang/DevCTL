@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"devopsctl/internal/logging"
-	"devopsctl/pkg/cli"
-	"devopsctl/pkg/cmdutil"
+	"devctl/internal/logging"
+	"devctl/pkg/cli"
+	"devctl/pkg/cmdutil"
 	"errors"
 	"log/slog"
 
@@ -15,10 +15,9 @@ var settings = cli.New()
 
 func NewCmdRoot() (*cobra.Command, error) {
 	cmd := &cobra.Command{
-		Use:          "devopsctl",
-		Short:        "DevOps Management Command Line Interface",
-		Long:         `DevOps Management Command Line Interface`,
-		Example:      `$ devopsctl mcp list`,
+		Use:          "devctl",
+		Short:        "Development CLI",
+		Long:         `Development CLI`,
 		SilenceUsage: true,
 	}
 
@@ -28,7 +27,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
 
-	cmd.AddCommand(NewCmdMcp())
+	// subcommand
 
 	return cmd, nil
 }
