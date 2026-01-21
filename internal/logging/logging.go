@@ -2,8 +2,8 @@ package logging
 
 import (
 	"context"
+	"io"
 	"log/slog"
-	"os"
 )
 
 // DebugEnabledFunc is a function type that determines if debug logging is enabled
@@ -46,19 +46,12 @@ func (h *DebugCheckHandler) WithGroup(name string) slog.Handler {
 }
 
 // NewLogger creates a new logger with dynamic debug checking
-func NewLogger(debugEnabled DebugEnabledFunc) *slog.Logger {
+func NewLogger(w io.Writer, debugEnabled DebugEnabledFunc) *slog.Logger {
 	// Create base handler that removes timestamps
-	baseHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	baseHandler := slog.NewTextHandler(w, &slog.HandlerOptions{
 		// Always use LevelDebug here to allow all messages through
 		// Our custom handler will do the filtering
 		Level: slog.LevelDebug,
-		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-			// Remove the time attribute
-			if a.Key == slog.TimeKey {
-				return slog.Attr{}
-			}
-			return a
-		},
 	})
 
 	// Wrap with our dynamic debug-checking handler
