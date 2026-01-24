@@ -1,15 +1,7 @@
-### STRUCTURE
-```
-devctl/
-├── cmd/devctl/            # Application entry points
-├── internal/              # Private application code
-│   ├── cmd/               # Command implementations (Cobra)
-│   └── logging/           # Custom logging infrastructure
-├── pkg/                   # Public library code (reusable)
-│   ├── cli/               # CLI utilities
-│   └── cmdutil/           # Command utilities
-└── scripts/               # Build and automation scripts
-```
+## CONVENTIONS
+
+- **Build**: `go run scripts/build.go`
+- **Testing**: BDD comments `#given/#when/#then`, TDD workflow (RED-GREEN-REFACTOR)
 
 ## TDD (Test-Driven Development)
 
@@ -34,8 +26,3 @@ devctl/
 - One test at a time - don't batch
 - Test file naming: `*_test.go` alongside source
 - BDD comments: `#given`, `#when`, `#then` (same as AAA)
-
-## CONVENTIONS
-
-- **Build**: `go run scripts/build.go`
-- **Testing**: BDD comments `#given/#when/#then`, TDD workflow (RED-GREEN-REFACTOR)
