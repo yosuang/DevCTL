@@ -1,7 +1,12 @@
-.idea
+.claude/settings.local.json
+.serena/
+.sisyphus/
+
+# IDE
+.idea/
+.vscode/
+
+# Build output
 /bin
 /dist
 /.goreleaser.generated.yml
-
-.claude/settings.local.json
-.serena/
