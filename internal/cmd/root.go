@@ -28,8 +28,6 @@ func NewCmdRoot() (*cobra.Command, error) {
 
 	setupLogging(cfg)
 
-	slog.Info("hello world")
-
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
 
 	return cmd, nil
