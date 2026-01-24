@@ -28,6 +28,64 @@
         "C:\\Users\\user\\.config\\devctl",
         "/home/user/.config/devctl"
       ]
+    },
+    "packages": {
+      "type": "array",
+      "description": "List of packages managed by devctl",
+      "items": {
+        "$ref": "#/definitions/package"
+      },
+      "default": []
+    },
+    "packageManagers": {
+      "type": "object",
+      "description": "Package manager configurations",
+      "additionalProperties": {
+        "$ref": "#/definitions/package"
+      },
+      "default": {}
+    }
+  },
+  "definitions": {
+    "package": {
+      "type": "object",
+      "description": "A package managed by devctl",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the package"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the package"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the package"
+        },
+        "installedBy": {
+          "$ref": "#/definitions/packageManager",
+          "description": "Package manager used to install this package"
+        },
+        "script": {
+          "type": "string",
+          "description": "Script content or path for the package"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "installedBy"
+      ],
+      "additionalProperties": false
+    },
+    "packageManager": {
+      "type": "string",
+      "description": "Package manager type for installation/management",
+      "enum": [
+        "scoop",
+        "pwsh"
+      ]
     }
   },
   "additionalProperties": false
