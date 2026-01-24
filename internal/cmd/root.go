@@ -43,14 +43,14 @@ func rootFlagErrorFunc(_ *cobra.Command, err error) error {
 func setupLogging(cfg *config.Config) {
 	logDir := filepath.Join(cfg.DataDir, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Printf("Failed to create log dir: %v", err)
+		fmt.Printf("Failed to create log dir: %s, error: %v", logDir, err)
 		os.Exit(1)
 	}
 
 	logfile := filepath.Join(logDir, fmt.Sprintf("%s.log", config.AppName))
 	f, err := os.OpenFile(logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+		fmt.Printf("Failed to open log file: %s, error: %v", logfile, err)
 		os.Exit(1)
 	}
 
