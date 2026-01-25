@@ -23,7 +23,7 @@ tag_name=""
 is_local=""
 do_push=""
 platform=""
-branch="trunk"
+branch="main"
 deploy_env="production"
 
 while [ $# -gt 0 ]; do
