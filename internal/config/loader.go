@@ -11,7 +11,7 @@ import (
 // Returns nil if file doesn't exist (not an error - allows fallback to defaults).
 // Returns error only for actual read/parse failures.
 func LoadFromFile(configDir string) (*Config, error) {
-	configPath := filepath.Join(configDir, "config.json")
+	configPath := filepath.Join(configDir, fmt.Sprintf("%s.json", AppName))
 
 	// If config file doesn't exist, return nil (not an error)
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -37,7 +37,7 @@ func SaveToFile(cfg *Config, configDir string) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	configPath := filepath.Join(configDir, "config.json")
+	configPath := filepath.Join(configDir, fmt.Sprintf("%s.json", AppName))
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

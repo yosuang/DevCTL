@@ -47,7 +47,7 @@ func runInit(cfg *config.Config) error {
 		fmt.Printf("%-10s %s\n", mgr.ID, status)
 	}
 
-	configPath := fmt.Sprintf("%s/config.json", cfg.ConfigDir)
+	configPath := fmt.Sprintf("%s/%s.json", cfg.ConfigDir, config.AppName)
 	fmt.Printf("\nConfiguration saved to: %s\n", configPath)
 
 	return nil
