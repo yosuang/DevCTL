@@ -6,7 +6,7 @@ const (
 
 // Config holds the configuration for devctl.
 type Config struct {
-	Debug           bool                                    `env:"DEVCTL_DEBUG"`
+	Debug           bool                                    `json:"-" env:"DEVCTL_DEBUG"`
 	DataDir         string                                  `json:"dataDir,omitempty" env:"DEVCTL_HOME"`
 	ConfigDir       string                                  `json:"configDir,omitempty" env:"DEVCTL_CONFIG_DIR"`
 	Packages        []PackageConfig                         `json:"packages,omitempty"`

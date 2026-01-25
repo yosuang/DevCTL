@@ -11,8 +11,8 @@ import (
 func NewCmdInit(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize configuration by detecting packages managers",
-		Long:  `Detects installed packages managers and saves their information to the configuration file.`,
+		Short: "Initialize configuration by detecting package managers",
+		Long:  `Detects installed package managers and saves their information to the configuration file.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runInit(cfg)
 		},
