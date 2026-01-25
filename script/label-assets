@@ -2,7 +2,7 @@
 set -e
 
 if [ $# -eq 0 ]; then
-  echo "usage: scripts/label-assets dist/devctl_*" >&2
+  echo "usage: script/label-assets dist/devctl_*" >&2
   exit 1
 fi
 

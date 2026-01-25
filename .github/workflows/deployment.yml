@@ -67,7 +67,7 @@ jobs:
         shell: bash
         env:
           TAG_NAME: ${{ inputs.tag_name }}
-        run: scripts/release --local "$TAG_NAME" --platform windows
+        run: script/release --local "$TAG_NAME" --platform windows
       - name: Set up MSBuild
         id: setupmsbuild
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
@@ -155,4 +155,4 @@ jobs:
           fi
           guard="echo"
           [ "$DO_PUBLISH" = "false" ] || guard=""
-          scripts/label-assets dist/devctl_* | xargs $guard gh release create "${release_args[@]}" --
+          script/label-assets dist/devctl_* | xargs $guard gh release create "${release_args[@]}" --

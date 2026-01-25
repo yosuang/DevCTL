@@ -1,6 +1,6 @@
 ## CONVENTIONS
 
-- **Build**: `go run scripts/build.go`
+- **Build**: `go run script/build.go`
 - **Testing**: BDD comments `#given/#when/#then`, TDD workflow (RED-GREEN-REFACTOR)
 
 ## TDD (Test-Driven Development)
