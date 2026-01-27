@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -38,7 +39,7 @@ func runImport(cfg *config.Config, filePath string) error {
 		if !isValidPackage(pkg) {
 			continue
 		}
-		if pkg.InstalledBy == config.Pwsh {
+		if pkg.InstalledBy != pkgmgr.ManagerTypeScoop {
 			continue
 		}
 		if _, ok := cfg.PackageManagers[pkg.InstalledBy]; !ok {
@@ -70,7 +71,7 @@ func runImport(cfg *config.Config, filePath string) error {
 		tracker.StartPackage(i)
 
 		mgrConfig := cfg.PackageManagers[pkg.InstalledBy]
-		mgr, err := getManager(pkg.InstalledBy, mgrConfig.ExecutablePath)
+		mgr, err := getManager(pkg.InstalledBy, mgrConfig)
 		if err != nil {
 			tracker.FailPackage(i, err)
 			continue
@@ -151,11 +152,40 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 	return nil
 }
 
-func getManager(pm config.PackageManager, _ string) (pkgmgr.Manager, error) {
-	switch pm {
-	case config.Scoop:
-		return scoop.New(), nil
+func getManager(managerType pkgmgr.ManagerType, mgrConfig config.PackageManagerConfig) (pkgmgr.Manager, error) {
+	if mgrConfig.ExecutablePath == "" {
+		return nil, fmt.Errorf("executable path of %s not configured", managerType)
+	}
+
+	if managerType == "" {
+		managerType = detectPlatformManager()
+	}
+
+	mgr, err := newPackageManager(managerType, mgrConfig.ExecutablePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create manager %s: %w", managerType, err)
+	}
+	return mgr, nil
+}
+
+func newPackageManager(managerType pkgmgr.ManagerType, executablePath string) (pkgmgr.Manager, error) {
+	if managerType == pkgmgr.ManagerTypeScoop {
+		return scoop.New(&scoop.Config{
+			ExecutablePath: executablePath,
+		}), nil
+	}
+	return nil, nil
+}
+
+func detectPlatformManager() pkgmgr.ManagerType {
+	switch runtime.GOOS {
+	case "windows":
+		return pkgmgr.ManagerTypeScoop
+	case "darwin":
+		return pkgmgr.ManagerTypeBrew
+	case "linux":
+		return pkgmgr.ManagerTypeApt
 	default:
-		return nil, fmt.Errorf("manager not implemented: %s", pm)
+		return ""
 	}
 }

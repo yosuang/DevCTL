@@ -1,6 +1,7 @@
 package config
 
 import (
+	"devctl/pkg/pkgmgr"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,16 +17,16 @@ func TestFindPackage(t *testing.T) {
 		{
 			name: "find existing package",
 			packages: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
-				{Name: "node", Version: "18.0.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
+				{Name: "node", Version: "18.0.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			findName: "git",
-			want:     &PackageConfig{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+			want:     &PackageConfig{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 		},
 		{
 			name: "package not found",
 			packages: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			findName: "node",
 			want:     nil,
@@ -48,7 +49,7 @@ func TestFindPackage(t *testing.T) {
 				{
 					Name:        "custom-tool",
 					Version:     "1.0.0",
-					InstalledBy: Pwsh,
+					InstalledBy: pkgmgr.ManagerTypePwsh,
 					Script:      "install.ps1",
 					HomeDir:     "/home/user/.custom",
 				},
@@ -57,7 +58,7 @@ func TestFindPackage(t *testing.T) {
 			want: &PackageConfig{
 				Name:        "custom-tool",
 				Version:     "1.0.0",
-				InstalledBy: Pwsh,
+				InstalledBy: pkgmgr.ManagerTypePwsh,
 				Script:      "install.ps1",
 				HomeDir:     "/home/user/.custom",
 			},
@@ -102,45 +103,45 @@ func TestMergePackages(t *testing.T) {
 			name:     "merge empty existing with new packages",
 			existing: []PackageConfig{},
 			new: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			want: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 		},
 		{
 			name: "merge existing with empty new",
 			existing: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			new: []PackageConfig{},
 			want: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 		},
 		{
 			name: "append new package to existing",
 			existing: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			new: []PackageConfig{
-				{Name: "node", Version: "18.0.0", InstalledBy: Scoop},
+				{Name: "node", Version: "18.0.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			want: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
-				{Name: "node", Version: "18.0.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
+				{Name: "node", Version: "18.0.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 		},
 		{
 			name: "update existing package with different version",
 			existing: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			new: []PackageConfig{
-				{Name: "git", Version: "2.41.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.41.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			want: []PackageConfig{
-				{Name: "git", Version: "2.41.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.41.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 		},
 		{
@@ -149,7 +150,7 @@ func TestMergePackages(t *testing.T) {
 				{
 					Name:        "custom-tool",
 					Version:     "1.0.0",
-					InstalledBy: Pwsh,
+					InstalledBy: pkgmgr.ManagerTypePwsh,
 					Script:      "install.ps1",
 					HomeDir:     "/home/user/.custom",
 				},
@@ -158,7 +159,7 @@ func TestMergePackages(t *testing.T) {
 				{
 					Name:        "custom-tool",
 					Version:     "2.0.0",
-					InstalledBy: Pwsh,
+					InstalledBy: pkgmgr.ManagerTypePwsh,
 					Script:      "install-v2.ps1",
 					HomeDir:     "/home/user/.custom-v2",
 				},
@@ -167,7 +168,7 @@ func TestMergePackages(t *testing.T) {
 				{
 					Name:        "custom-tool",
 					Version:     "2.0.0",
-					InstalledBy: Pwsh,
+					InstalledBy: pkgmgr.ManagerTypePwsh,
 					Script:      "install-v2.ps1",
 					HomeDir:     "/home/user/.custom-v2",
 				},
@@ -176,17 +177,17 @@ func TestMergePackages(t *testing.T) {
 		{
 			name: "merge multiple packages with updates and additions",
 			existing: []PackageConfig{
-				{Name: "git", Version: "2.40.0", InstalledBy: Scoop},
-				{Name: "node", Version: "18.0.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.40.0", InstalledBy: pkgmgr.ManagerTypeScoop},
+				{Name: "node", Version: "18.0.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			new: []PackageConfig{
-				{Name: "git", Version: "2.41.0", InstalledBy: Scoop},
-				{Name: "python", Version: "3.11.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.41.0", InstalledBy: pkgmgr.ManagerTypeScoop},
+				{Name: "python", Version: "3.11.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 			want: []PackageConfig{
-				{Name: "git", Version: "2.41.0", InstalledBy: Scoop},
-				{Name: "node", Version: "18.0.0", InstalledBy: Scoop},
-				{Name: "python", Version: "3.11.0", InstalledBy: Scoop},
+				{Name: "git", Version: "2.41.0", InstalledBy: pkgmgr.ManagerTypeScoop},
+				{Name: "node", Version: "18.0.0", InstalledBy: pkgmgr.ManagerTypeScoop},
+				{Name: "python", Version: "3.11.0", InstalledBy: pkgmgr.ManagerTypeScoop},
 			},
 		},
 	}

@@ -23,3 +23,12 @@ type Manager interface {
 	// List returns a list of currently installed packages.
 	List(ctx context.Context) ([]Package, error)
 }
+
+type ManagerType string
+
+const (
+	ManagerTypeScoop ManagerType = "scoop"
+	ManagerTypePwsh  ManagerType = "pwsh"
+	ManagerTypeBrew  ManagerType = "brew"
+	ManagerTypeApt   ManagerType = "apt"
+)

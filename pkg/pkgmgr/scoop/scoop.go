@@ -10,21 +10,28 @@ import (
 	"devctl/pkg/pkgmgr"
 )
 
-func init() {
-	pkgmgr.Register("windows", func() pkgmgr.Manager {
-		return New()
-	})
+// Config holds configuration for the Scoop package manager.
+type Config struct {
+	// ExecutablePath is the path to the scoop executable.
+	// If empty, defaults to "scoop" (assumes it's in PATH).
+	ExecutablePath string
 }
 
 // Manager implements pkgmgr.Manager for the Scoop package manager.
 type Manager struct {
-	// execCommand allows overriding exec.CommandContext for testing.
+	execPath    string
 	execCommand func(ctx context.Context, name string, arg ...string) *exec.Cmd
 }
 
-// New returns a new ScoopManager.
-func New() *Manager {
+// New returns a new ScoopManager with the given configuration.
+// If cfg is nil or ExecutablePath is empty, defaults to "scoop".
+func New(cfg *Config) *Manager {
+	execPath := "scoop"
+	if cfg != nil && cfg.ExecutablePath != "" {
+		execPath = cfg.ExecutablePath
+	}
 	return &Manager{
+		execPath:    execPath,
 		execCommand: exec.CommandContext,
 	}
 }
@@ -35,7 +42,7 @@ func (m *Manager) Install(ctx context.Context, names ...string) error {
 		return nil
 	}
 	args := append([]string{"install"}, names...)
-	cmd := m.execCommand(ctx, "scoop", args...)
+	cmd := m.execCommand(ctx, m.execPath, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -44,7 +51,7 @@ func (m *Manager) Install(ctx context.Context, names ...string) error {
 			return pkgmgr.ErrAlreadyInstalled
 		}
 		return &pkgmgr.ExecutionError{
-			Cmd:    "scoop " + strings.Join(args, " "),
+			Cmd:    m.execPath + " " + strings.Join(args, " "),
 			Stderr: errStr,
 			Err:    err,
 		}
@@ -58,7 +65,7 @@ func (m *Manager) Uninstall(ctx context.Context, names ...string) error {
 		return nil
 	}
 	args := append([]string{"uninstall"}, names...)
-	cmd := m.execCommand(ctx, "scoop", args...)
+	cmd := m.execCommand(ctx, m.execPath, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -67,7 +74,7 @@ func (m *Manager) Uninstall(ctx context.Context, names ...string) error {
 			return pkgmgr.ErrNotInstalled
 		}
 		return &pkgmgr.ExecutionError{
-			Cmd:    "scoop " + strings.Join(args, " "),
+			Cmd:    m.execPath + " " + strings.Join(args, " "),
 			Stderr: errStr,
 			Err:    err,
 		}
@@ -85,13 +92,13 @@ type exportOutput struct {
 
 // List returns a list of installed packages using scoop export.
 func (m *Manager) List(ctx context.Context) ([]pkgmgr.Package, error) {
-	cmd := m.execCommand(ctx, "scoop", "export")
+	cmd := m.execCommand(ctx, m.execPath, "export")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return nil, &pkgmgr.ExecutionError{
-			Cmd:    "scoop export",
+			Cmd:    m.execPath + " export",
 			Stderr: stderr.String(),
 			Err:    err,
 		}

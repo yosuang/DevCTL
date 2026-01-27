@@ -1,29 +1,30 @@
 package packages
 
 import (
-	"devctl/internal/config"
 	"devctl/pkg/executil"
+	"devctl/pkg/pkgmgr"
 )
 
-var knownManagers = []config.PackageManager{
-	config.Scoop,
-	config.Pwsh,
+// TODO obtain from pkgmgr.ManagerType with specified GOOS
+var knownManagers = []pkgmgr.ManagerType{
+	pkgmgr.ManagerTypeScoop,
+	pkgmgr.ManagerTypePwsh,
 }
 
 type PackageManagerInfo struct {
-	ID             config.PackageManager
+	Type           pkgmgr.ManagerType
 	Installed      bool
 	ExecutablePath string
 }
 
-func DetectPackageManagers() map[config.PackageManager]PackageManagerInfo {
-	managers := map[config.PackageManager]PackageManagerInfo{}
+func DetectPackageManagers() map[pkgmgr.ManagerType]PackageManagerInfo {
+	managers := map[pkgmgr.ManagerType]PackageManagerInfo{}
 
 	for _, mgr := range knownManagers {
 		path := executil.LookPath(string(mgr))
 
 		managers[mgr] = PackageManagerInfo{
-			ID:             mgr,
+			Type:           mgr,
 			Installed:      path != "",
 			ExecutablePath: path,
 		}

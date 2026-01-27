@@ -3,6 +3,7 @@ package cmd
 import (
 	"devctl/internal/config"
 	"devctl/internal/packages"
+	"devctl/pkg/pkgmgr"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -23,10 +24,10 @@ func NewCmdInit(cfg *config.Config) *cobra.Command {
 
 func runInit(cfg *config.Config) error {
 	detectResult := packages.DetectPackageManagers()
-	packageManagers := map[config.PackageManager]config.PackageManagerConfig{}
+	packageManagers := map[pkgmgr.ManagerType]config.PackageManagerConfig{}
 	for _, p := range detectResult {
-		packageManagers[p.ID] = config.PackageManagerConfig{
-			ID:             p.ID,
+		packageManagers[p.Type] = config.PackageManagerConfig{
+			Type:           p.Type,
 			Version:        "",
 			ExecutablePath: p.ExecutablePath,
 		}
@@ -44,7 +45,7 @@ func runInit(cfg *config.Config) error {
 		if mgr.Installed {
 			status = fmt.Sprintf("✓ Installed at: %s", mgr.ExecutablePath)
 		}
-		fmt.Printf("%-10s %s\n", mgr.ID, status)
+		fmt.Printf("%-10s %s\n", mgr.Type, status)
 	}
 
 	configPath := fmt.Sprintf("%s/%s.json", cfg.ConfigDir, config.AppName)

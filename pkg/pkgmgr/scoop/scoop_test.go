@@ -38,7 +38,7 @@ func TestHelperProcess(_ *testing.T) {
 	}
 
 	switch cmd {
-	case "scoop":
+	case "scoop", "custom-scoop", "C:\\custom\\path\\scoop.exe", "./bin/scoop":
 		switch subcmd {
 		case "install":
 			pkg := args[len(args)-1] // Simplistic: take last arg
@@ -78,6 +78,7 @@ func fakeExecCommand(ctx context.Context, name string, arg ...string) *exec.Cmd 
 
 func TestScoopInstall(t *testing.T) {
 	mgr := &Manager{
+		execPath:    "scoop",
 		execCommand: fakeExecCommand,
 	}
 	ctx := context.Background()
@@ -115,6 +116,7 @@ func TestScoopInstall(t *testing.T) {
 func TestScoopUninstall(t *testing.T) {
 	// #given: 一个配置了 mock execCommand 的 ScoopManager
 	mgr := &Manager{
+		execPath:    "scoop",
 		execCommand: fakeExecCommand,
 	}
 	ctx := context.Background()
@@ -153,6 +155,7 @@ func TestScoopUninstall(t *testing.T) {
 
 func TestScoopList(t *testing.T) {
 	mgr := &Manager{
+		execPath:    "scoop",
 		execCommand: fakeExecCommand,
 	}
 	ctx := context.Background()
@@ -164,4 +167,60 @@ func TestScoopList(t *testing.T) {
 	require.Equal(t, "curl", pkgs[0].Name)
 	require.Equal(t, "8.5.0", pkgs[0].Version)
 	require.Equal(t, "scoop", pkgs[0].Source)
+}
+
+func TestNewWithConfig(t *testing.T) {
+	tests := []struct {
+		name             string
+		cfg              *Config
+		expectedExecPath string
+	}{
+		{
+			name:             "nil config uses default",
+			cfg:              nil,
+			expectedExecPath: "scoop",
+		},
+		{
+			name:             "empty config uses default",
+			cfg:              &Config{},
+			expectedExecPath: "scoop",
+		},
+		{
+			name: "custom executable path",
+			cfg: &Config{
+				ExecutablePath: "C:\\custom\\path\\scoop.exe",
+			},
+			expectedExecPath: "C:\\custom\\path\\scoop.exe",
+		},
+		{
+			name: "relative path",
+			cfg: &Config{
+				ExecutablePath: "./bin/scoop",
+			},
+			expectedExecPath: "./bin/scoop",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgr := New(tt.cfg)
+
+			require.NotNil(t, mgr)
+			require.Equal(t, tt.expectedExecPath, mgr.execPath)
+			require.NotNil(t, mgr.execCommand)
+		})
+	}
+}
+
+func TestCustomExecutablePath(t *testing.T) {
+	customPath := "custom-scoop"
+	mgr := &Manager{
+		execPath:    customPath,
+		execCommand: fakeExecCommand,
+	}
+	ctx := context.Background()
+
+	err := mgr.Install(ctx, "test-pkg")
+
+	require.NoError(t, err)
 }
