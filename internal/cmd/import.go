@@ -139,7 +139,12 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 		}
 	}
 
-	if err := mgr.Install(ctx, pkg.Name); err != nil {
+	packageWithVersion := pkg.Name
+	if pkg.Version != "" {
+		packageWithVersion = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
+	}
+
+	if err := mgr.Install(ctx, packageWithVersion); err != nil {
 		return fmt.Errorf("failed to install: %w", err)
 	}
 
