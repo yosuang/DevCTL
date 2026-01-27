@@ -9,7 +9,6 @@ import (
 	"devctl/pkg/pkgmgr/scoop"
 	"devctl/pkg/version"
 	"fmt"
-	"runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -65,6 +64,11 @@ func runImport(cfg *config.Config, filePath string) error {
 
 	for i, pkg := range validPackages {
 		tracker.StartPackage(i)
+
+		if pkg.InstalledBy == "" {
+			tracker.FailPackage(i, fmt.Errorf("manager type is required"))
+			continue
+		}
 
 		mgrConfig := cfg.PackageManagers[pkg.InstalledBy]
 		mgr, err := getManager(pkg.InstalledBy, mgrConfig)
@@ -135,10 +139,6 @@ func getManager(managerType pkgmgr.ManagerType, mgrConfig config.PackageManagerC
 		return nil, fmt.Errorf("executable path of %s not configured", managerType)
 	}
 
-	if managerType == "" {
-		managerType = detectPlatformManager()
-	}
-
 	mgr, err := newPackageManager(managerType, mgrConfig.ExecutablePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create manager %s: %w", managerType, err)
@@ -153,17 +153,4 @@ func newPackageManager(managerType pkgmgr.ManagerType, executablePath string) (p
 		}), nil
 	}
 	return nil, nil
-}
-
-func detectPlatformManager() pkgmgr.ManagerType {
-	switch runtime.GOOS {
-	case "windows":
-		return pkgmgr.ManagerTypeScoop
-	case "darwin":
-		return pkgmgr.ManagerTypeBrew
-	case "linux":
-		return pkgmgr.ManagerTypeApt
-	default:
-		return ""
-	}
 }
