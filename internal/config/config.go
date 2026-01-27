@@ -57,3 +57,22 @@ func (cfg *Config) Merge(other *Config) {
 		cfg.Packages = other.Packages
 	}
 }
+
+func MergePackages(existing, newPkgs []PackageConfig) []PackageConfig {
+	pkgMap := make(map[string]PackageConfig)
+
+	for _, pkg := range existing {
+		pkgMap[pkg.Name] = pkg
+	}
+
+	for _, pkg := range newPkgs {
+		pkgMap[pkg.Name] = pkg
+	}
+
+	result := make([]PackageConfig, 0, len(pkgMap))
+	for _, pkg := range pkgMap {
+		result = append(result, pkg)
+	}
+
+	return result
+}

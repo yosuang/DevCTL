@@ -3,13 +3,12 @@ package cmd
 import (
 	"context"
 	"devctl/internal/config"
+	"devctl/internal/formats"
 	"devctl/internal/ui"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/scoop"
 	"devctl/pkg/version"
-	"encoding/json"
 	"fmt"
-	"os"
 	"runtime"
 
 	"github.com/spf13/cobra"
@@ -29,23 +28,20 @@ func NewCmdImport(cfg *config.Config) *cobra.Command {
 }
 
 func runImport(cfg *config.Config, filePath string) error {
-	importConfig, err := loadImportConfig(filePath)
+	importFile, err := formats.LoadImportFile(filePath)
 	if err != nil {
 		return err
 	}
 
 	var validPackages []config.PackageConfig
-	for _, pkg := range importConfig.Packages {
-		if !isValidPackage(pkg) {
-			continue
-		}
+	for _, pkg := range importFile.Packages {
 		if pkg.InstalledBy != pkgmgr.ManagerTypeScoop {
 			continue
 		}
 		if _, ok := cfg.PackageManagers[pkg.InstalledBy]; !ok {
 			return fmt.Errorf("package manager %s not configured", pkg.InstalledBy)
 		}
-		validPackages = append(validPackages, pkg)
+		validPackages = append(validPackages, pkg.ToConfig())
 	}
 
 	if len(validPackages) == 0 {
@@ -96,24 +92,6 @@ func runImport(cfg *config.Config, filePath string) error {
 	}
 
 	return nil
-}
-
-func loadImportConfig(filePath string) (*config.Config, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	var importConfig config.Config
-	if err := json.Unmarshal(data, &importConfig); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	return &importConfig, nil
-}
-
-func isValidPackage(pkg config.PackageConfig) bool {
-	return pkg.Name != "" && pkg.Version != "" && pkg.InstalledBy != ""
 }
 
 func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig) error {
