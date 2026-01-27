@@ -21,10 +21,9 @@ func TestLoadFromFile(t *testing.T) {
 
 	t.Run("loads valid JSON config file", func(t *testing.T) {
 		tempDir := t.TempDir()
-		configPath := filepath.Join(tempDir, "config.json")
+		configPath := filepath.Join(tempDir, "devctl.json")
 
 		configContent := `{
-  "debug": true,
   "dataDir": "/custom/data",
   "configDir": "/custom/config"
 }`
@@ -35,14 +34,13 @@ func TestLoadFromFile(t *testing.T) {
 
 		assert.NoError(t, err)
 		require.NotNil(t, cfg)
-		assert.True(t, cfg.Debug)
 		assert.Equal(t, "/custom/data", cfg.DataDir)
 		assert.Equal(t, "/custom/config", cfg.ConfigDir)
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {
 		tempDir := t.TempDir()
-		configPath := filepath.Join(tempDir, "config.json")
+		configPath := filepath.Join(tempDir, "devctl.json")
 
 		invalidJSON := `{invalid json`
 		err := os.WriteFile(configPath, []byte(invalidJSON), 0644)
@@ -62,7 +60,6 @@ func TestSaveToFile(t *testing.T) {
 		configDir := filepath.Join(tempDir, "subdir")
 
 		cfg := &Config{
-			Debug:     true,
 			DataDir:   "/test/data",
 			ConfigDir: "/test/config",
 		}
@@ -71,12 +68,11 @@ func TestSaveToFile(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		configPath := filepath.Join(configDir, "config.json")
+		configPath := filepath.Join(configDir, "devctl.json")
 		assert.FileExists(t, configPath)
 
 		loadedCfg, err := LoadFromFile(configDir)
 		require.NoError(t, err)
-		assert.Equal(t, cfg.Debug, loadedCfg.Debug)
 		assert.Equal(t, cfg.DataDir, loadedCfg.DataDir)
 		assert.Equal(t, cfg.ConfigDir, loadedCfg.ConfigDir)
 	})
@@ -84,17 +80,16 @@ func TestSaveToFile(t *testing.T) {
 	t.Run("overwrites existing config file", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		oldCfg := &Config{Debug: false, DataDir: "/old"}
+		oldCfg := &Config{DataDir: "/old"}
 		err := SaveToFile(oldCfg, tempDir)
 		require.NoError(t, err)
 
-		newCfg := &Config{Debug: true, DataDir: "/new"}
+		newCfg := &Config{DataDir: "/new"}
 		err = SaveToFile(newCfg, tempDir)
 		require.NoError(t, err)
 
 		loadedCfg, err := LoadFromFile(tempDir)
 		require.NoError(t, err)
-		assert.True(t, loadedCfg.Debug)
 		assert.Equal(t, "/new", loadedCfg.DataDir)
 	})
 }

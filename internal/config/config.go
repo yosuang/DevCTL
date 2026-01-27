@@ -14,7 +14,6 @@ type Config struct {
 }
 
 type PackageConfig struct {
-	ID          string         `json:"id,omitempty"`
 	Name        string         `json:"name,omitempty"`
 	Version     string         `json:"version,omitempty"`
 	InstalledBy PackageManager `json:"installedBy,omitempty"`
@@ -50,5 +49,16 @@ func (cfg *Config) Merge(other *Config) {
 	}
 	if other.ConfigDir != "" {
 		cfg.ConfigDir = other.ConfigDir
+	}
+	if other.PackageManagers != nil {
+		if cfg.PackageManagers == nil {
+			cfg.PackageManagers = make(map[PackageManager]PackageManagerConfig)
+		}
+		for k, v := range other.PackageManagers {
+			cfg.PackageManagers[k] = v
+		}
+	}
+	if other.Packages != nil {
+		cfg.Packages = other.Packages
 	}
 }
