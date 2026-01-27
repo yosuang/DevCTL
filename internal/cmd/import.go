@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 	"devctl/internal/config"
+	"devctl/internal/ui"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/scoop"
-	"devctl/pkg/ui"
 	"devctl/pkg/version"
 	"encoding/json"
 	"fmt"
