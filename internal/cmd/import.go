@@ -27,7 +27,7 @@ func NewCmdImport(cfg *config.Config) *cobra.Command {
 }
 
 func runImport(cfg *config.Config, filePath string) error {
-	importFile, err := formats.LoadImportFile(filePath)
+	importFile, err := formats.LoadManifestFile(filePath)
 	if err != nil {
 		return err
 	}

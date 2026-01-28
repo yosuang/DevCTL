@@ -32,6 +32,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 
 	cmd.AddCommand(NewCmdInit(cfg))
 	cmd.AddCommand(NewCmdImport(cfg))
+	cmd.AddCommand(NewCmdExport(cfg))
 
 	return cmd, nil
 }
