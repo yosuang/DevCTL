@@ -77,12 +77,18 @@ func runImport(cfg *config.Config, filePath string) error {
 			continue
 		}
 
-		if err := processPackage(ctx, mgr, pkg); err != nil {
+		status, note, err := processPackage(ctx, mgr, pkg)
+		if err != nil {
 			tracker.FailPackage(i, err)
 			continue
 		}
 
-		tracker.CompletePackage(i)
+		if status == ui.StatusSkipped {
+			tracker.SkipPackage(i, note)
+		} else {
+			tracker.CompletePackage(i, note)
+		}
+
 		successfulPackages = append(successfulPackages, pkg)
 	}
 
@@ -98,10 +104,10 @@ func runImport(cfg *config.Config, filePath string) error {
 	return nil
 }
 
-func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig) error {
+func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig) (ui.PackageStatus, string, error) {
 	installedPackages, err := mgr.List(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list packages: %w", err)
+		return ui.StatusFailed, "", fmt.Errorf("failed to list packages: %w", err)
 	}
 
 	var installedPkg *pkgmgr.Package
@@ -114,12 +120,23 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 
 	if installedPkg != nil {
 		if version.Equal(installedPkg.Version, pkg.Version) {
-			return nil
+			return ui.StatusSkipped, "already installed", nil
 		}
 
 		if err := mgr.Uninstall(ctx, pkg.Name); err != nil {
-			return fmt.Errorf("failed to uninstall: %w", err)
+			return ui.StatusFailed, "", fmt.Errorf("failed to uninstall: %w", err)
 		}
+
+		packageWithVersion := pkg.Name
+		if pkg.Version != "" {
+			packageWithVersion = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
+		}
+
+		if err := mgr.Install(ctx, packageWithVersion); err != nil {
+			return ui.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
+		}
+
+		return ui.StatusSuccess, "reinstalled", nil
 	}
 
 	packageWithVersion := pkg.Name
@@ -128,10 +145,10 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 	}
 
 	if err := mgr.Install(ctx, packageWithVersion); err != nil {
-		return fmt.Errorf("failed to install: %w", err)
+		return ui.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
 	}
 
-	return nil
+	return ui.StatusSuccess, "installed", nil
 }
 
 func getManager(managerType pkgmgr.ManagerType, mgrConfig config.PackageManagerConfig) (pkgmgr.Manager, error) {

@@ -26,6 +26,7 @@ type PackageProgress struct {
 	Name    string
 	Version string
 	Status  PackageStatus
+	Note    string
 	Error   error
 }
 
@@ -106,13 +107,21 @@ func (m progressModel) View() string {
 		switch pkg.Status {
 		case StatusSuccess:
 			line = successStyle.Render("✓") + " " + pkgDisplay
+			if pkg.Note != "" {
+				line += successStyle.Render(fmt.Sprintf(" (%s)", pkg.Note))
+			}
 		case StatusFailed:
 			line = failStyle.Render("✗") + " " + pkgDisplay
 			if pkg.Error != nil {
 				line += failStyle.Render(fmt.Sprintf(" (%v)", pkg.Error))
 			}
 		case StatusSkipped:
-			line = skipStyle.Render("⊘") + " " + pkgDisplay + skipStyle.Render(" (skipped)")
+			line = skipStyle.Render("⊘") + " " + pkgDisplay
+			if pkg.Note != "" {
+				line += skipStyle.Render(fmt.Sprintf(" (%s)", pkg.Note))
+			} else {
+				line += skipStyle.Render(" (skipped)")
+			}
 		case StatusInstalling:
 			line = installingStyle.Render(m.spinner.View()) + " " + installingStyle.Render(pkgDisplay)
 		case StatusPending:
@@ -176,12 +185,13 @@ func (pt *ProgressTracker) StartPackage(index int) {
 	pt.updateDisplay()
 }
 
-func (pt *ProgressTracker) CompletePackage(index int) {
+func (pt *ProgressTracker) CompletePackage(index int, note string) {
 	if index < 0 || index >= len(pt.packages) {
 		return
 	}
 
 	pt.packages[index].Status = StatusSuccess
+	pt.packages[index].Note = note
 	pt.updateDisplay()
 }
 
@@ -195,12 +205,13 @@ func (pt *ProgressTracker) FailPackage(index int, err error) {
 	pt.updateDisplay()
 }
 
-func (pt *ProgressTracker) SkipPackage(index int) {
+func (pt *ProgressTracker) SkipPackage(index int, note string) {
 	if index < 0 || index >= len(pt.packages) {
 		return
 	}
 
 	pt.packages[index].Status = StatusSkipped
+	pt.packages[index].Note = note
 	pt.updateDisplay()
 }
 
