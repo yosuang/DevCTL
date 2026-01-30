@@ -43,12 +43,12 @@ func Init() *Config {
 	cfg := loadDefaults()
 
 	envConfig := loadFromEnv()
-	if envConfig == nil {
+	if envConfig != nil {
 		cfg.merge(envConfig)
 	}
 
 	fileConfig := loadFromFile(cfg.ConfigDir)
-	if fileConfig == nil {
+	if fileConfig != nil {
 		cfg.merge(fileConfig)
 	}
 
