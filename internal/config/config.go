@@ -31,9 +31,8 @@ type PackageConfig struct {
 }
 
 type PackageManagerConfig struct {
-	Type           pkgmgr.ManagerType `json:"type,omitempty"`
-	Version        string             `json:"version,omitempty"`
-	ExecutablePath string             `json:"executablePath,omitempty"`
+	Version        string `json:"version,omitempty"`
+	ExecutablePath string `json:"executablePath,omitempty"`
 }
 
 func (cfg *Config) AddFlags(fs *pflag.FlagSet) {

@@ -129,7 +129,6 @@ func saveConfiguration(out ui.Output, cfg *config.Config, results map[pkgmgr.Man
 	for _, p := range results {
 		if p.Installed {
 			packageManagers[p.Type] = config.PackageManagerConfig{
-				Type:           p.Type,
 				Version:        "",
 				ExecutablePath: p.ExecutablePath,
 			}
