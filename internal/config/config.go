@@ -20,16 +20,14 @@ type Config struct {
 	ConfigDir string `json:"-" env:"DEVCTL_CONFIG_DIR"`
 
 	DataDir         string                                      `json:"dataDir,omitempty"`
-	Packages        []PackageConfig                             `json:"packages,omitempty"`
 	PackageManagers map[pkgmgr.ManagerType]PackageManagerConfig `json:"packageManagers,omitempty"`
+	Packages        []PackageConfig                             `json:"packages,omitempty"`
 }
 
 type PackageConfig struct {
 	Name        string             `json:"name,omitempty"`
 	Version     string             `json:"version,omitempty"`
 	InstalledBy pkgmgr.ManagerType `json:"installedBy,omitempty"`
-	Script      string             `json:"script,omitempty"`
-	HomeDir     string             `json:"homeDir,omitempty"`
 }
 
 type PackageManagerConfig struct {

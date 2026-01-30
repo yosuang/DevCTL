@@ -1,17 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/yosuang/devctl/main/devctl.schema.json",
-  "title": "Devctl Configuration",
+  "$id": "https://raw.githubusercontent.com/yosuang/devctl/main/assets/devctl.schema.json",
+  "title": "DevCTL Configuration",
   "description": "Configuration schema for devctl",
   "type": "object",
   "properties": {
     "$schema": {
       "type": "string"
-    },
-    "debug": {
-      "type": "boolean",
-      "description": "Enable debug mode for verbose logging",
-      "default": false
     },
     "dataDir": {
       "type": "string",
@@ -21,13 +16,12 @@
         "/home/user/.devctl"
       ]
     },
-    "configDir": {
-      "type": "string",
-      "description": "Configuration directory path for devctl",
-      "examples": [
-        "C:\\Users\\user\\.config\\devctl",
-        "/home/user/.config/devctl"
-      ]
+    "packageManagers": {
+      "type": "object",
+      "description": "Configuration for package managers",
+      "additionalProperties": {
+        "$ref": "#/definitions/packageManagerConfig"
+      }
     },
     "packages": {
       "type": "array",
@@ -36,14 +30,6 @@
         "$ref": "#/definitions/package"
       },
       "default": []
-    },
-    "packageManagers": {
-      "type": "object",
-      "description": "Package manager configurations",
-      "additionalProperties": {
-        "$ref": "#/definitions/package"
-      },
-      "default": {}
     }
   },
   "definitions": {
@@ -51,13 +37,9 @@
       "type": "object",
       "description": "A package managed by devctl",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the package"
-        },
         "name": {
           "type": "string",
-          "description": "Display name of the package"
+          "description": "Name of the package"
         },
         "version": {
           "type": "string",
@@ -66,17 +48,27 @@
         "installedBy": {
           "$ref": "#/definitions/packageManager",
           "description": "Package manager used to install this package"
-        },
-        "script": {
-          "type": "string",
-          "description": "Script content or path for the package"
         }
       },
-      "required": [
-        "name",
-        "version",
-        "installedBy"
-      ],
+      "additionalProperties": false
+    },
+    "packageManagerConfig": {
+      "type": "object",
+      "description": "Configuration for a package manager",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/packageManager",
+          "description": "Type of package manager"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the package manager"
+        },
+        "executablePath": {
+          "type": "string",
+          "description": "Path to the package manager executable"
+        }
+      },
       "additionalProperties": false
     },
     "packageManager": {
@@ -84,7 +76,9 @@
       "description": "Package manager type for installation/management",
       "enum": [
         "scoop",
-        "pwsh"
+        "pwsh",
+        "brew",
+        "apt"
       ]
     }
   },
