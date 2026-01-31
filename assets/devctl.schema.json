@@ -19,6 +19,9 @@
     "packageManagers": {
       "type": "object",
       "description": "Configuration for package managers",
+      "propertyNames": {
+        "$ref": "#/definitions/packageManager"
+      },
       "additionalProperties": {
         "$ref": "#/definitions/packageManagerConfig"
       }
