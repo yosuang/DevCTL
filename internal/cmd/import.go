@@ -59,6 +59,10 @@ func runImport(cfg *config.Config, filePath string) error {
 		}
 	}
 
+	// Show spinner during cache building phase
+	prepSpinner := ui.NewPreparationSpinner()
+	prepSpinner.Start("Preparing context")
+
 	managerCache := make(map[pkgmgr.ManagerType]pkgmgr.Manager)
 	installedCache := make(map[pkgmgr.ManagerType]map[string]*pkgmgr.Package)
 
@@ -72,17 +76,20 @@ func runImport(cfg *config.Config, filePath string) error {
 	for managerType := range managerTypes {
 		mgrConfig, ok := cfg.PackageManagers[managerType]
 		if !ok {
+			prepSpinner.Stop()
 			return fmt.Errorf("package manager %s not configured", managerType)
 		}
 
 		mgr, err := getManager(managerType, mgrConfig)
 		if err != nil {
+			prepSpinner.Stop()
 			return fmt.Errorf("failed to create manager %s: %w", managerType, err)
 		}
 		managerCache[managerType] = mgr
 
 		installedPackages, err := mgr.List(ctx)
 		if err != nil {
+			prepSpinner.Stop()
 			return fmt.Errorf("failed to list packages for %s: %w", managerType, err)
 		}
 
@@ -92,6 +99,8 @@ func runImport(cfg *config.Config, filePath string) error {
 		}
 		installedCache[managerType] = installedMap
 	}
+
+	prepSpinner.Stop()
 
 	var tracker = ui.NewProgressTracker(packageInfos)
 	tracker.Start()
