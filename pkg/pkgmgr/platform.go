@@ -24,6 +24,7 @@ func GetSupportedManagers(p Platform) []ManagerType {
 	case PlatformWindows:
 		return []ManagerType{
 			ManagerTypeScoop,
+			ManagerTypePowerShell,
 			ManagerTypePwsh,
 		}
 	case PlatformDarwin:

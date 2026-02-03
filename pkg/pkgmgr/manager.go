@@ -27,8 +27,9 @@ type Manager interface {
 type ManagerType string
 
 const (
-	ManagerTypeScoop ManagerType = "scoop"
-	ManagerTypePwsh  ManagerType = "pwsh"
-	ManagerTypeBrew  ManagerType = "brew"
-	ManagerTypeApt   ManagerType = "apt"
+	ManagerTypeScoop      ManagerType = "scoop"
+	ManagerTypePowerShell ManagerType = "powershell"
+	ManagerTypePwsh       ManagerType = "pwsh"
+	ManagerTypeBrew       ManagerType = "brew"
+	ManagerTypeApt        ManagerType = "apt"
 )
