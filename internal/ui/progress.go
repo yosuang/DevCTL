@@ -97,6 +97,9 @@ func (m progressModel) View() string {
 	installingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 	pendingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
+	// Fixed width for status column to ensure alignment
+	statusStyle := lipgloss.NewStyle().Width(2)
+
 	for i, pkg := range m.packages {
 		var line string
 		pkgDisplay := pkg.Name
@@ -106,26 +109,31 @@ func (m progressModel) View() string {
 
 		switch pkg.Status {
 		case StatusSuccess:
-			line = successStyle.Render("✓") + " " + pkgDisplay
+			statusIcon := statusStyle.Render(successStyle.Render("✓"))
+			line = statusIcon + " " + pkgDisplay
 			if pkg.Note != "" {
 				line += successStyle.Render(fmt.Sprintf(" (%s)", pkg.Note))
 			}
 		case StatusFailed:
-			line = failStyle.Render("✗") + " " + pkgDisplay
+			statusIcon := statusStyle.Render(failStyle.Render("✗"))
+			line = statusIcon + " " + pkgDisplay
 			if pkg.Error != nil {
 				line += failStyle.Render(fmt.Sprintf(" (%v)", pkg.Error))
 			}
 		case StatusSkipped:
-			line = skipStyle.Render("⊘") + " " + pkgDisplay
+			statusIcon := statusStyle.Render(skipStyle.Render("⊘"))
+			line = statusIcon + " " + pkgDisplay
 			if pkg.Note != "" {
 				line += skipStyle.Render(fmt.Sprintf(" (%s)", pkg.Note))
 			} else {
 				line += skipStyle.Render(" (skipped)")
 			}
 		case StatusInstalling:
-			line = installingStyle.Render(m.spinner.View()) + " " + installingStyle.Render(pkgDisplay)
+			statusIcon := statusStyle.Render(installingStyle.Render(m.spinner.View()))
+			line = statusIcon + " " + installingStyle.Render(pkgDisplay)
 		case StatusPending:
-			line = pendingStyle.Render("○") + " " + pendingStyle.Render(pkgDisplay)
+			statusIcon := statusStyle.Render(pendingStyle.Render("○"))
+			line = statusIcon + " " + pendingStyle.Render(pkgDisplay)
 		}
 
 		builder.WriteString(line)
