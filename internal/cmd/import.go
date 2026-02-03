@@ -59,6 +59,40 @@ func runImport(cfg *config.Config, filePath string) error {
 		}
 	}
 
+	managerCache := make(map[pkgmgr.ManagerType]pkgmgr.Manager)
+	installedCache := make(map[pkgmgr.ManagerType]map[string]*pkgmgr.Package)
+
+	managerTypes := make(map[pkgmgr.ManagerType]bool)
+	for _, pkg := range validPackages {
+		if pkg.InstalledBy != "" {
+			managerTypes[pkg.InstalledBy] = true
+		}
+	}
+
+	for managerType := range managerTypes {
+		mgrConfig, ok := cfg.PackageManagers[managerType]
+		if !ok {
+			return fmt.Errorf("package manager %s not configured", managerType)
+		}
+
+		mgr, err := getManager(managerType, mgrConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create manager %s: %w", managerType, err)
+		}
+		managerCache[managerType] = mgr
+
+		installedPackages, err := mgr.List(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list packages for %s: %w", managerType, err)
+		}
+
+		installedMap := make(map[string]*pkgmgr.Package)
+		for j := range installedPackages {
+			installedMap[installedPackages[j].Name] = &installedPackages[j]
+		}
+		installedCache[managerType] = installedMap
+	}
+
 	var tracker = ui.NewProgressTracker(packageInfos)
 	tracker.Start()
 
@@ -70,14 +104,8 @@ func runImport(cfg *config.Config, filePath string) error {
 			continue
 		}
 
-		mgrConfig := cfg.PackageManagers[pkg.InstalledBy]
-		mgr, err := getManager(pkg.InstalledBy, mgrConfig)
-		if err != nil {
-			tracker.FailPackage(i, err)
-			continue
-		}
-
-		status, note, err := processPackage(ctx, mgr, pkg)
+		mgr := managerCache[pkg.InstalledBy]
+		status, note, err := processPackage(ctx, mgr, pkg, installedCache[pkg.InstalledBy])
 		if err != nil {
 			tracker.FailPackage(i, err)
 			continue
@@ -104,19 +132,8 @@ func runImport(cfg *config.Config, filePath string) error {
 	return nil
 }
 
-func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig) (ui.PackageStatus, string, error) {
-	installedPackages, err := mgr.List(ctx)
-	if err != nil {
-		return ui.StatusFailed, "", fmt.Errorf("failed to list packages: %w", err)
-	}
-
-	var installedPkg *pkgmgr.Package
-	for i := range installedPackages {
-		if installedPackages[i].Name == pkg.Name {
-			installedPkg = &installedPackages[i]
-			break
-		}
-	}
+func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig, installedMap map[string]*pkgmgr.Package) (ui.PackageStatus, string, error) {
+	installedPkg := installedMap[pkg.Name]
 
 	if installedPkg != nil {
 		if version.Equal(installedPkg.Version, pkg.Version) {
@@ -136,6 +153,12 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 			return ui.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
 		}
 
+		installedMap[pkg.Name] = &pkgmgr.Package{
+			Name:    pkg.Name,
+			Version: pkg.Version,
+			Source:  string(pkg.InstalledBy),
+		}
+
 		return ui.StatusSuccess, "reinstalled", nil
 	}
 
@@ -146,6 +169,12 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 
 	if err := mgr.Install(ctx, packageWithVersion); err != nil {
 		return ui.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
+	}
+
+	installedMap[pkg.Name] = &pkgmgr.Package{
+		Name:    pkg.Name,
+		Version: pkg.Version,
+		Source:  string(pkg.InstalledBy),
 	}
 
 	return ui.StatusSuccess, "installed", nil
