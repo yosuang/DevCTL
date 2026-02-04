@@ -103,7 +103,6 @@ func runImport(cfg *config.Config, filePath string) error {
 	prepSpinner.Stop()
 
 	var tracker = ui.NewProgressTracker(packageInfos)
-	tracker.Start()
 
 	for i, pkg := range validPackages {
 		tracker.StartPackage(i)
@@ -128,8 +127,6 @@ func runImport(cfg *config.Config, filePath string) error {
 
 		successfulPackages = append(successfulPackages, pkg)
 	}
-
-	tracker.Stop()
 
 	// TODO bellow code should be handled by ui internal
 	cfg.Packages = config.MergePackages(cfg.Packages, successfulPackages)

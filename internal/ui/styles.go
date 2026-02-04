@@ -4,23 +4,26 @@ import "github.com/charmbracelet/lipgloss"
 
 // Styles contains all the lipgloss styles used throughout the UI.
 type Styles struct {
-	Success lipgloss.Style
-	Error   lipgloss.Style
-	Info    lipgloss.Style
-	Warning lipgloss.Style
-	Title   lipgloss.Style
-	Pending lipgloss.Style
+	Primary   lipgloss.Style
+	Secondary lipgloss.Style
+	Success   lipgloss.Style
+	Info      lipgloss.Style
+	Warning   lipgloss.Style
+	Error     lipgloss.Style
+	Title     lipgloss.Style
+	Pending   lipgloss.Style
 }
 
 // NewStyles creates a new Styles instance with default color scheme.
 func NewStyles() *Styles {
 	return &Styles{
-		Success: lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true),
-		Error:   lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true),
-		Info:    lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
-		Warning: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
-		Title:   lipgloss.NewStyle().Bold(true),
-		Pending: lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		Primary:   lipgloss.NewStyle().Foreground(lipgloss.Color("#3B82F6")),
+		Secondary: lipgloss.NewStyle().Foreground(lipgloss.Color("#64748B")),
+		Success:   lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")),
+		Info:      lipgloss.NewStyle().Foreground(lipgloss.Color("#0EA5E9")),
+		Warning:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B")),
+		Error:     lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")),
+		Title:     lipgloss.NewStyle().Bold(true),
 	}
 }
 
