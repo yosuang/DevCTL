@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,6 +20,10 @@ const (
 	StatusSkipped
 )
 
+var (
+	statusStyle = lipgloss.NewStyle().Width(2)
+)
+
 type PackageProgress struct {
 	Name    string
 	Version string
@@ -34,115 +36,74 @@ type ProgressTracker struct {
 	packages []PackageProgress
 	current  int
 	program  *tea.Program
-	model    *progressModel
 	output   io.Writer
 }
 
 type progressModel struct {
-	packages []PackageProgress
-	current  int
-	spinner  spinner.Model
-	quitting bool
+	styles  *Styles
+	pkg     *PackageProgress
+	spinner spinner.Model
 }
 
-type tickMsg time.Time
-
-type finalMsg struct {
-	packages []PackageProgress
-}
-
-func tickCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
-}
+type progressStopMsg struct{}
 
 func (m progressModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, tickCmd())
+	return m.spinner.Tick
 }
 
 func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
-			m.quitting = true
 			return m, tea.Quit
 		}
-	case finalMsg:
-		m.packages = msg.packages
+	case progressStopMsg:
 		return m, tea.Quit
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
-	case tickMsg:
-		return m, tickCmd()
-	case []PackageProgress:
-		m.packages = msg
-		return m, nil
 	}
 	return m, nil
 }
 
 func (m progressModel) View() string {
-	if m.quitting {
-		return ""
+	pkgDisplay := m.pkg.Name
+	if m.pkg.Version != "" {
+		pkgDisplay = fmt.Sprintf("%s@%s", m.pkg.Name, m.pkg.Version)
 	}
 
-	var builder strings.Builder
-
-	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	failStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-	skipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	installingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	pendingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-
-	// Fixed width for status column to ensure alignment
-	statusStyle := lipgloss.NewStyle().Width(2)
-
-	for i, pkg := range m.packages {
-		var line string
-		pkgDisplay := pkg.Name
-		if pkg.Version != "" {
-			pkgDisplay = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
+	var line string
+	switch m.pkg.Status {
+	case StatusSuccess:
+		statusIcon := statusStyle.Render(m.styles.Success.Render(IconSuccess))
+		line = statusIcon + " " + pkgDisplay
+		if m.pkg.Note != "" {
+			line += m.styles.Success.Render(fmt.Sprintf(" (%s)", m.pkg.Note))
 		}
-
-		switch pkg.Status {
-		case StatusSuccess:
-			statusIcon := statusStyle.Render(successStyle.Render("✓"))
-			line = statusIcon + " " + pkgDisplay
-			if pkg.Note != "" {
-				line += successStyle.Render(fmt.Sprintf(" (%s)", pkg.Note))
-			}
-		case StatusFailed:
-			statusIcon := statusStyle.Render(failStyle.Render("✗"))
-			line = statusIcon + " " + pkgDisplay
-			if pkg.Error != nil {
-				line += failStyle.Render(fmt.Sprintf(" (%v)", pkg.Error))
-			}
-		case StatusSkipped:
-			statusIcon := statusStyle.Render(skipStyle.Render("⊘"))
-			line = statusIcon + " " + pkgDisplay
-			if pkg.Note != "" {
-				line += skipStyle.Render(fmt.Sprintf(" (%s)", pkg.Note))
-			} else {
-				line += skipStyle.Render(" (skipped)")
-			}
-		case StatusInstalling:
-			statusIcon := statusStyle.Render(installingStyle.Render(m.spinner.View()))
-			line = statusIcon + " " + installingStyle.Render(pkgDisplay)
-		case StatusPending:
-			statusIcon := statusStyle.Render(pendingStyle.Render("○"))
-			line = statusIcon + " " + pendingStyle.Render(pkgDisplay)
+	case StatusFailed:
+		statusIcon := statusStyle.Render(m.styles.Error.Render(IconError))
+		line = statusIcon + " " + pkgDisplay
+		if m.pkg.Error != nil {
+			line += m.styles.Error.Render(fmt.Sprintf(" (%v)", m.pkg.Error))
 		}
-
-		builder.WriteString(line)
-		if i < len(m.packages)-1 {
-			builder.WriteString("\n")
+	case StatusSkipped:
+		statusIcon := statusStyle.Render(m.styles.Secondary.Render(IconSkipped))
+		line = statusIcon + " " + pkgDisplay
+		if m.pkg.Note != "" {
+			line += m.styles.Secondary.Render(fmt.Sprintf(" (%s)", m.pkg.Note))
+		} else {
+			line += m.styles.Secondary.Render(" (skipped)")
 		}
+	case StatusInstalling:
+		statusIcon := statusStyle.Render(m.styles.Primary.Render(m.spinner.View()))
+		line = statusIcon + " " + pkgDisplay
+	case StatusPending:
+		statusIcon := statusStyle.Render(m.styles.Info.Render("○"))
+		line = statusIcon + " " + pkgDisplay
 	}
 
-	return builder.String() + "\n"
+	return line + "\n"
 }
 
 type PackageInfo struct {
@@ -167,22 +128,6 @@ func NewProgressTracker(packages []PackageInfo) *ProgressTracker {
 	}
 }
 
-func (pt *ProgressTracker) Start() {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-
-	model := progressModel{
-		packages: pt.packages,
-		current:  pt.current,
-		spinner:  s,
-	}
-
-	pt.model = &model
-	pt.program = tea.NewProgram(model, tea.WithOutput(pt.output))
-	go pt.program.Run()
-}
-
 func (pt *ProgressTracker) StartPackage(index int) {
 	if index < 0 || index >= len(pt.packages) {
 		return
@@ -190,7 +135,20 @@ func (pt *ProgressTracker) StartPackage(index int) {
 
 	pt.current = index
 	pt.packages[index].Status = StatusInstalling
-	pt.updateDisplay()
+
+	// Start bubbletea for this package
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	//s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+
+	model := progressModel{
+		styles:  NewStyles(),
+		pkg:     &pt.packages[index],
+		spinner: s,
+	}
+
+	pt.program = tea.NewProgram(model, tea.WithOutput(pt.output))
+	go pt.program.Run()
 }
 
 func (pt *ProgressTracker) CompletePackage(index int, note string) {
@@ -200,7 +158,8 @@ func (pt *ProgressTracker) CompletePackage(index int, note string) {
 
 	pt.packages[index].Status = StatusSuccess
 	pt.packages[index].Note = note
-	pt.updateDisplay()
+
+	pt.stop()
 }
 
 func (pt *ProgressTracker) FailPackage(index int, err error) {
@@ -210,7 +169,8 @@ func (pt *ProgressTracker) FailPackage(index int, err error) {
 
 	pt.packages[index].Status = StatusFailed
 	pt.packages[index].Error = err
-	pt.updateDisplay()
+
+	pt.stop()
 }
 
 func (pt *ProgressTracker) SkipPackage(index int, note string) {
@@ -220,20 +180,15 @@ func (pt *ProgressTracker) SkipPackage(index int, note string) {
 
 	pt.packages[index].Status = StatusSkipped
 	pt.packages[index].Note = note
-	pt.updateDisplay()
+
+	pt.stop()
 }
 
-func (pt *ProgressTracker) Stop() {
+func (pt *ProgressTracker) stop() {
 	if pt.program != nil {
-		finalPackages := append([]PackageProgress{}, pt.packages...)
-		pt.program.Send(finalMsg{packages: finalPackages})
+		pt.program.Send(progressStopMsg{})
 		pt.program.Wait()
-	}
-}
-
-func (pt *ProgressTracker) updateDisplay() {
-	if pt.program != nil {
-		pt.program.Send(pt.packages)
+		pt.program = nil
 	}
 }
 
