@@ -11,6 +11,8 @@ import (
 // Output defines the interface for all terminal output operations.
 // This abstraction allows for different output implementations (terminal, JSON, silent).
 type Output interface {
+	Write(p []byte) (n int, err error)
+
 	// Info prints an informational message.
 	Info(msg string)
 
@@ -38,14 +40,13 @@ type Output interface {
 	// PrintInstallCommand displays the command that will be executed.
 	PrintInstallCommand(cmd string)
 
+	Print(msg string)
+
 	// Println prints a plain line without formatting.
 	Println(msg string)
 
 	// Printf prints a formatted message.
 	Printf(format string, args ...any)
-
-	// NewProgressTracker creates a new progress tracker for package operations.
-	NewProgressTracker(packages []PackageInfo) *ProgressTracker
 }
 
 // DetectionResult represents package manager detection results.
@@ -97,6 +98,10 @@ func NewDefaultOutput() *TerminalOutput {
 	return NewTerminalOutput(os.Stdout, os.Stderr)
 }
 
+func (t *TerminalOutput) Write(p []byte) (n int, err error) {
+	return t.Out.Write(p)
+}
+
 // Info prints an informational message.
 func (t *TerminalOutput) Info(msg string) {
 	fmt.Fprintf(t.Out, "%s %s\n", t.Styles.Info.Render(IconInfo), msg)
@@ -114,7 +119,7 @@ func (t *TerminalOutput) Error(msg string) {
 
 // Warning prints a warning message.
 func (t *TerminalOutput) Warning(msg string) {
-	fmt.Fprintf(t.Out, "%s %s\n", t.Styles.Warning.Render("⚠"), msg)
+	fmt.Fprintf(t.Out, "%s %s\n", t.Styles.Warning.Render(IconWarning), msg)
 }
 
 // PrintDetectionResults displays package manager detection results.
@@ -183,6 +188,10 @@ func (t *TerminalOutput) PrintInstallCommand(cmd string) {
 	fmt.Fprintf(t.Out, "\nCommand to execute:\n  %s\n\n", t.Styles.Info.Render(cmd))
 }
 
+func (t *TerminalOutput) Print(msg string) {
+	fmt.Fprint(t.Out, msg)
+}
+
 // Println prints a plain line.
 func (t *TerminalOutput) Println(msg string) {
 	fmt.Fprintln(t.Out, msg)
@@ -191,11 +200,6 @@ func (t *TerminalOutput) Println(msg string) {
 // Printf prints a formatted message.
 func (t *TerminalOutput) Printf(format string, args ...any) {
 	fmt.Fprintf(t.Out, format, args...)
-}
-
-// NewProgressTracker creates a new progress tracker.
-func (t *TerminalOutput) NewProgressTracker(packages []PackageInfo) *ProgressTracker {
-	return NewProgressTracker(packages)
 }
 
 // ToManagerStatus converts a map of package manager info to ManagerStatus slice.

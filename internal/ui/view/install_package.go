@@ -1,13 +1,11 @@
-package ui
+package view
 
 import (
+	"devctl/internal/ui"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type PackageStatus int
@@ -18,10 +16,6 @@ const (
 	StatusSuccess
 	StatusFailed
 	StatusSkipped
-)
-
-var (
-	statusStyle = lipgloss.NewStyle().Width(2)
 )
 
 type PackageProgress struct {
@@ -36,11 +30,11 @@ type ProgressTracker struct {
 	packages []PackageProgress
 	current  int
 	program  *tea.Program
-	output   io.Writer
+	output   ui.Output
 }
 
 type progressModel struct {
-	styles  *Styles
+	styles  *ui.Styles
 	pkg     *PackageProgress
 	spinner spinner.Model
 }
@@ -76,19 +70,19 @@ func (m progressModel) View() string {
 	var line string
 	switch m.pkg.Status {
 	case StatusSuccess:
-		statusIcon := statusStyle.Render(m.styles.Success.Render(IconSuccess))
+		statusIcon := m.styles.Default.Render(m.styles.Success.Render(ui.IconSuccess))
 		line = statusIcon + " " + pkgDisplay
 		if m.pkg.Note != "" {
 			line += m.styles.Success.Render(fmt.Sprintf(" (%s)", m.pkg.Note))
 		}
 	case StatusFailed:
-		statusIcon := statusStyle.Render(m.styles.Error.Render(IconError))
+		statusIcon := m.styles.Default.Render(m.styles.Error.Render(ui.IconError))
 		line = statusIcon + " " + pkgDisplay
 		if m.pkg.Error != nil {
 			line += m.styles.Error.Render(fmt.Sprintf(" (%v)", m.pkg.Error))
 		}
 	case StatusSkipped:
-		statusIcon := statusStyle.Render(m.styles.Secondary.Render(IconSkipped))
+		statusIcon := m.styles.Default.Render(m.styles.Secondary.Render(ui.IconSkipped))
 		line = statusIcon + " " + pkgDisplay
 		if m.pkg.Note != "" {
 			line += m.styles.Secondary.Render(fmt.Sprintf(" (%s)", m.pkg.Note))
@@ -96,10 +90,10 @@ func (m progressModel) View() string {
 			line += m.styles.Secondary.Render(" (skipped)")
 		}
 	case StatusInstalling:
-		statusIcon := statusStyle.Render(m.styles.Primary.Render(m.spinner.View()))
+		statusIcon := m.styles.Default.Render(m.styles.Primary.Render(m.spinner.View()))
 		line = statusIcon + " " + pkgDisplay
 	case StatusPending:
-		statusIcon := statusStyle.Render(m.styles.Info.Render("○"))
+		statusIcon := m.styles.Default.Render(m.styles.Info.Render(ui.IconPending))
 		line = statusIcon + " " + pkgDisplay
 	}
 
@@ -111,7 +105,7 @@ type PackageInfo struct {
 	Version string
 }
 
-func NewProgressTracker(packages []PackageInfo) *ProgressTracker {
+func NewProgressTracker(output ui.Output, packages []PackageInfo) *ProgressTracker {
 	pkgs := make([]PackageProgress, len(packages))
 	for i, pkg := range packages {
 		pkgs[i] = PackageProgress{
@@ -122,9 +116,9 @@ func NewProgressTracker(packages []PackageInfo) *ProgressTracker {
 	}
 
 	return &ProgressTracker{
+		output:   output,
 		packages: pkgs,
 		current:  -1,
-		output:   os.Stdout,
 	}
 }
 
@@ -139,10 +133,9 @@ func (pt *ProgressTracker) StartPackage(index int) {
 	// Start bubbletea for this package
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	//s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 
 	model := progressModel{
-		styles:  NewStyles(),
+		styles:  ui.NewStyles(),
 		pkg:     &pt.packages[index],
 		spinner: s,
 	}

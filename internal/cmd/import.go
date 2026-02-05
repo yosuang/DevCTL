@@ -5,6 +5,8 @@ import (
 	"devctl/internal/config"
 	"devctl/internal/formats"
 	"devctl/internal/ui"
+	"devctl/internal/ui/component"
+	"devctl/internal/ui/view"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/scoop"
 	"devctl/pkg/version"
@@ -27,6 +29,7 @@ func NewCmdImport(cfg *config.Config) *cobra.Command {
 }
 
 func runImport(cfg *config.Config, filePath string) error {
+	output := ui.NewDefaultOutput()
 	importFile, err := formats.LoadManifestFile(filePath)
 	if err != nil {
 		return err
@@ -51,16 +54,16 @@ func runImport(cfg *config.Config, filePath string) error {
 	ctx := context.Background()
 	var successfulPackages []config.PackageConfig
 
-	packageInfos := make([]ui.PackageInfo, len(validPackages))
+	packageInfos := make([]view.PackageInfo, len(validPackages))
 	for i, pkg := range validPackages {
-		packageInfos[i] = ui.PackageInfo{
+		packageInfos[i] = view.PackageInfo{
 			Name:    pkg.Name,
 			Version: pkg.Version,
 		}
 	}
 
 	// Show spinner during cache building phase
-	prepSpinner := ui.NewPreparationSpinner()
+	prepSpinner := component.NewSpinner(output)
 	prepSpinner.Start("Preparing context")
 
 	managerCache := make(map[pkgmgr.ManagerType]pkgmgr.Manager)
@@ -102,7 +105,7 @@ func runImport(cfg *config.Config, filePath string) error {
 
 	prepSpinner.Stop()
 
-	var tracker = ui.NewProgressTracker(packageInfos)
+	var tracker = view.NewProgressTracker(output, packageInfos)
 
 	for i, pkg := range validPackages {
 		tracker.StartPackage(i)
@@ -119,7 +122,7 @@ func runImport(cfg *config.Config, filePath string) error {
 			continue
 		}
 
-		if status == ui.StatusSkipped {
+		if status == view.StatusSkipped {
 			tracker.SkipPackage(i, note)
 		} else {
 			tracker.CompletePackage(i, note)
@@ -138,16 +141,16 @@ func runImport(cfg *config.Config, filePath string) error {
 	return nil
 }
 
-func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig, installedMap map[string]*pkgmgr.Package) (ui.PackageStatus, string, error) {
+func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageConfig, installedMap map[string]*pkgmgr.Package) (view.PackageStatus, string, error) {
 	installedPkg := installedMap[pkg.Name]
 
 	if installedPkg != nil {
 		if version.Equal(installedPkg.Version, pkg.Version) {
-			return ui.StatusSkipped, "already installed", nil
+			return view.StatusSkipped, "already installed", nil
 		}
 
 		if err := mgr.Uninstall(ctx, pkg.Name); err != nil {
-			return ui.StatusFailed, "", fmt.Errorf("failed to uninstall: %w", err)
+			return view.StatusFailed, "", fmt.Errorf("failed to uninstall: %w", err)
 		}
 
 		packageWithVersion := pkg.Name
@@ -156,7 +159,7 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 		}
 
 		if err := mgr.Install(ctx, packageWithVersion); err != nil {
-			return ui.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
+			return view.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
 		}
 
 		installedMap[pkg.Name] = &pkgmgr.Package{
@@ -165,7 +168,7 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 			Source:  string(pkg.InstalledBy),
 		}
 
-		return ui.StatusSuccess, "reinstalled", nil
+		return view.StatusSuccess, "reinstalled", nil
 	}
 
 	packageWithVersion := pkg.Name
@@ -174,7 +177,7 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 	}
 
 	if err := mgr.Install(ctx, packageWithVersion); err != nil {
-		return ui.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
+		return view.StatusFailed, "", fmt.Errorf("failed to install: %w", err)
 	}
 
 	installedMap[pkg.Name] = &pkgmgr.Package{
@@ -183,7 +186,7 @@ func processPackage(ctx context.Context, mgr pkgmgr.Manager, pkg config.PackageC
 		Source:  string(pkg.InstalledBy),
 	}
 
-	return ui.StatusSuccess, "installed", nil
+	return view.StatusSuccess, "installed", nil
 }
 
 func getManager(managerType pkgmgr.ManagerType, mgrConfig config.PackageManagerConfig) (pkgmgr.Manager, error) {
