@@ -5,6 +5,7 @@ import (
 	"devctl/internal/config"
 	"devctl/internal/installer"
 	"devctl/internal/ui"
+	"devctl/internal/ui/component"
 	"devctl/pkg/executil"
 	"devctl/pkg/pkgmgr"
 	"fmt"
@@ -41,7 +42,10 @@ func runInit(cfg *config.Config) error {
 	}
 
 	out.Println("")
-	confirmed, err := ui.ConfirmAutoInstall(len(uninstalled))
+	confirmed, err := component.NewConfirmForm(component.ConfirmFormConfig{
+		Title: fmt.Sprintf("Found %d uninstalled package manager(s). Install automatically?", len(uninstalled)),
+		Desc:  "This will execute installation scripts on your system.",
+	})
 	if err != nil {
 		return fmt.Errorf("failed to get user confirmation: %w", err)
 	}
@@ -162,7 +166,9 @@ func attemptAutoInstall(out ui.Output, managerType pkgmgr.ManagerType, platformS
 			out.Println("")
 		}
 
-		showGuide, _ := ui.ConfirmShowGuide()
+		showGuide, _ := component.NewConfirmForm(component.ConfirmFormConfig{
+			Title: "Show manual installation guide?",
+		})
 		if showGuide {
 			showManualInstallGuide(out, managerType, platformStr)
 		}
@@ -186,7 +192,10 @@ func attemptAutoInstall(out ui.Output, managerType pkgmgr.ManagerType, platformS
 		return fmt.Errorf("prerequisites not met for %s", managerType)
 	}
 
-	confirmed, err := ui.ConfirmProceed(string(managerType))
+	confirmed, err := component.NewConfirmForm(component.ConfirmFormConfig{
+		Title: fmt.Sprintf("Proceed with %s installation?", string(managerType)),
+		Desc:  "This will modify your system PATH and configuration.",
+	})
 	if err != nil || !confirmed {
 		return fmt.Errorf("installation cancelled by user")
 	}
