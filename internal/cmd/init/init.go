@@ -1,10 +1,11 @@
-package cmd
+package init
 
 import (
 	"context"
 	"devctl/internal/config"
 	"devctl/internal/installer"
 	"devctl/internal/ui"
+	"devctl/internal/ui/widgets"
 	"devctl/pkg/executil"
 	"devctl/pkg/pkgmgr"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCmdInit(cfg *config.Config) *cobra.Command {
+func NewCmd(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize configuration by detecting package managers",
@@ -28,36 +29,39 @@ func NewCmdInit(cfg *config.Config) *cobra.Command {
 }
 
 func runInit(cfg *config.Config) error {
-	out := ui.NewDefaultOutput()
+	output := ui.NewDefaultOutput()
 
 	currentPlatform := pkgmgr.GetCurrent()
 	detectResult := detectPackageManagers(currentPlatform)
-	displayDetectionResults(out, detectResult, currentPlatform)
+	displayDetectionResults(output, detectResult, currentPlatform)
 
 	uninstalled := getUninstalledManagers(detectResult)
 	if len(uninstalled) == 0 {
-		out.Println("")
-		return saveConfiguration(out, cfg, detectResult)
+		output.Println("")
+		return saveConfiguration(output, cfg, detectResult)
 	}
 
-	out.Println("")
-	confirmed, err := ui.ConfirmAutoInstall(len(uninstalled))
+	output.Println("")
+	confirmed, err := widgets.NewConfirmForm(widgets.ConfirmFormConfig{
+		Title: fmt.Sprintf("Found %d uninstalled package manager(s). Install automatically?", len(uninstalled)),
+		Desc:  "This will execute installation scripts on your system.",
+	})
 	if err != nil {
 		return fmt.Errorf("failed to get user confirmation: %w", err)
 	}
 
 	if !confirmed {
-		out.Println("\nManual installation guides:")
+		output.Println("\nManual installation guides:")
 		for _, mgr := range uninstalled {
-			showManualInstallGuide(out, mgr.Type, string(currentPlatform))
+			showManualInstallGuide(output, mgr.Type, string(currentPlatform))
 		}
-		out.Println("")
-		return saveConfiguration(out, cfg, detectResult)
+		output.Println("")
+		return saveConfiguration(output, cfg, detectResult)
 	}
 
 	for _, mgr := range uninstalled {
-		if err := attemptAutoInstall(out, mgr.Type, string(currentPlatform), cfg.Debug); err != nil {
-			out.Error(fmt.Sprintf("Failed to install %s: %v", mgr.Type, err))
+		if err := attemptAutoInstall(output, mgr.Type, string(currentPlatform), cfg.Debug); err != nil {
+			output.Error(fmt.Sprintf("Failed to install %s: %v", mgr.Type, err))
 			continue
 		}
 
@@ -71,8 +75,8 @@ func runInit(cfg *config.Config) error {
 		}
 	}
 
-	out.Println("")
-	return saveConfiguration(out, cfg, detectResult)
+	output.Println("")
+	return saveConfiguration(output, cfg, detectResult)
 }
 
 type PackageManagerInfo struct {
@@ -98,17 +102,17 @@ func detectPackageManagers(p pkgmgr.Platform) map[pkgmgr.ManagerType]PackageMana
 	return managers
 }
 
-func displayDetectionResults(out ui.Output, results map[pkgmgr.ManagerType]PackageManagerInfo, p pkgmgr.Platform) {
-	managers := make([]ui.ManagerStatus, 0, len(results))
+func displayDetectionResults(output ui.Output, results map[pkgmgr.ManagerType]PackageManagerInfo, p pkgmgr.Platform) {
+	managers := make([]ManagerStatus, 0, len(results))
 	for _, mgr := range results {
-		managers = append(managers, ui.ManagerStatus{
+		managers = append(managers, ManagerStatus{
 			Name:      string(mgr.Type),
 			Installed: mgr.Installed,
 			Path:      mgr.ExecutablePath,
 		})
 	}
 
-	out.PrintDetectionResults(ui.DetectionResult{
+	printDetectionResults(output, DetectionResult{
 		Platform: string(p),
 		Managers: managers,
 	})
@@ -146,7 +150,7 @@ func saveConfiguration(out ui.Output, cfg *config.Config, results map[pkgmgr.Man
 	return nil
 }
 
-func attemptAutoInstall(out ui.Output, managerType pkgmgr.ManagerType, platformStr string, debug bool) error {
+func attemptAutoInstall(output ui.Output, managerType pkgmgr.ManagerType, platformStr string, debug bool) error {
 	inst := installer.GetInstaller(managerType)
 	if inst == nil {
 		return fmt.Errorf("no installer available for %s", managerType)
@@ -154,39 +158,44 @@ func attemptAutoInstall(out ui.Output, managerType pkgmgr.ManagerType, platformS
 
 	canAuto, err := inst.CanAutoInstall()
 	if !canAuto {
-		out.Error(fmt.Sprintf("%s: Automatic installation not available", managerType))
+		output.Error(fmt.Sprintf("%s: Automatic installation not available", managerType))
 
 		failedPrereqs := getFailedPrereqs(inst.GetPrerequisites())
 		if len(failedPrereqs) > 0 {
-			out.PrintPrerequisites(failedPrereqs)
-			out.Println("")
+			printPrerequisites(output, failedPrereqs)
+			output.Println("")
 		}
 
-		showGuide, _ := ui.ConfirmShowGuide()
+		showGuide, _ := widgets.NewConfirmForm(widgets.ConfirmFormConfig{
+			Title: "Show manual installation guide?",
+		})
 		if showGuide {
-			showManualInstallGuide(out, managerType, platformStr)
+			showManualInstallGuide(output, managerType, platformStr)
 		}
 		return fmt.Errorf("automatic installation not supported: %w", err)
 	}
 
-	out.Info(fmt.Sprintf("Installing %s...", managerType))
+	output.Info(fmt.Sprintf("Installing %s...", managerType))
 
 	cmd := inst.GetInstallCommand()
 	slog.Debug("installer command", slog.String("manager", string(managerType)), slog.String("cmd", cmd))
 	if debug {
-		out.PrintInstallCommand(cmd)
+		output.Printf("\nCommand to execute:\n  %s\n\n", ui.DefaultStyles.Info.Render(cmd))
 	}
 
 	failedPrereqs := getFailedPrereqs(inst.GetPrerequisites())
 	if len(failedPrereqs) > 0 {
-		out.Error(fmt.Sprintf("%s: prerequisites not met for automatic installation", managerType))
-		out.PrintPrerequisites(failedPrereqs)
-		out.Println("")
-		showManualInstallGuide(out, managerType, platformStr)
+		output.Error(fmt.Sprintf("%s: prerequisites not met for automatic installation", managerType))
+		printPrerequisites(output, failedPrereqs)
+		output.Println("")
+		showManualInstallGuide(output, managerType, platformStr)
 		return fmt.Errorf("prerequisites not met for %s", managerType)
 	}
 
-	confirmed, err := ui.ConfirmProceed(string(managerType))
+	confirmed, err := widgets.NewConfirmForm(widgets.ConfirmFormConfig{
+		Title: fmt.Sprintf("Proceed with %s installation?", string(managerType)),
+		Desc:  "This will modify your system PATH and configuration.",
+	})
 	if err != nil || !confirmed {
 		return fmt.Errorf("installation cancelled by user")
 	}
@@ -202,26 +211,26 @@ func attemptAutoInstall(out ui.Output, managerType pkgmgr.ManagerType, platformS
 	}()
 
 	for progress := range progressChan {
-		out.PrintInstallProgress(progress.Stage, progress.Message)
+		output.Printf("%s [%s] %s\n", ui.DefaultStyles.Info.Render(ui.IconInfo), progress.Stage, progress.Message)
 	}
 
 	if err := <-errChan; err != nil {
-		out.Error("Installation failed")
-		showManualInstallGuide(out, managerType, platformStr)
+		output.Error("Installation failed")
+		showManualInstallGuide(output, managerType, platformStr)
 		return err
 	}
 
-	out.Success(fmt.Sprintf("%s installed successfully!", managerType))
+	output.Success(fmt.Sprintf("%s installed successfully!", managerType))
 	return nil
 }
 
-func getFailedPrereqs(prereqs []installer.Prerequisite) []ui.PrerequisiteResult {
-	failed := make([]ui.PrerequisiteResult, 0, len(prereqs))
+func getFailedPrereqs(prereqs []installer.Prerequisite) []PrerequisiteResult {
+	failed := make([]PrerequisiteResult, 0, len(prereqs))
 	for _, prereq := range prereqs {
 		if prereq.Passed {
 			continue
 		}
-		failed = append(failed, ui.PrerequisiteResult{
+		failed = append(failed, PrerequisiteResult{
 			Name:    prereq.Name,
 			Passed:  prereq.Passed,
 			Message: prereq.Message,
@@ -230,14 +239,14 @@ func getFailedPrereqs(prereqs []installer.Prerequisite) []ui.PrerequisiteResult 
 	return failed
 }
 
-func showManualInstallGuide(out ui.Output, managerType pkgmgr.ManagerType, platformStr string) {
+func showManualInstallGuide(output ui.Output, managerType pkgmgr.ManagerType, platformStr string) {
 	guide := installer.GetInstallGuide(managerType, platformStr)
 	if guide == nil {
-		out.Printf("No installation guide available for %s\n", managerType)
+		output.Printf("No installation guide available for %s\n", managerType)
 		return
 	}
 
-	out.PrintManualGuide(ui.ManualGuide{
+	printManualGuide(output, ManualGuide{
 		ManagerName:  string(managerType),
 		Instructions: guide.Instructions,
 		URL:          guide.URL,

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	initcmd "devctl/internal/cmd/init"
 	"devctl/internal/config"
 	"devctl/internal/logging"
 	"devctl/pkg/cmdutil"
@@ -30,7 +31,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
 
-	cmd.AddCommand(NewCmdInit(cfg))
+	cmd.AddCommand(initcmd.NewCmd(cfg))
 	cmd.AddCommand(NewCmdImport(cfg))
 	cmd.AddCommand(NewCmdExport(cfg))
 	cmd.AddCommand(NewCmdSync(cfg))

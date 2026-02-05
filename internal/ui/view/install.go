@@ -135,7 +135,7 @@ func (pt *ProgressTracker) StartPackage(index int) {
 	s.Spinner = spinner.Dot
 
 	model := progressModel{
-		styles:  ui.NewStyles(),
+		styles:  ui.DefaultStyles,
 		pkg:     &pt.packages[index],
 		spinner: s,
 	}
