@@ -30,9 +30,15 @@ type PackageConfig struct {
 	InstalledBy pkgmgr.ManagerType `json:"installedBy,omitempty"`
 }
 
+type CustomManagerMetadata struct {
+	Buckets map[string]string `json:"buckets,omitempty"`
+	Taps    map[string]string `json:"taps,omitempty"`
+}
+
 type PackageManagerConfig struct {
-	Version        string `json:"version,omitempty"`
-	ExecutablePath string `json:"executablePath,omitempty"`
+	Version        string                 `json:"version,omitempty"`
+	ExecutablePath string                 `json:"executablePath,omitempty"`
+	Custom         *CustomManagerMetadata `json:"custom,omitempty"`
 }
 
 func (cfg *Config) AddFlags(fs *pflag.FlagSet) {

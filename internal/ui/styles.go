@@ -4,6 +4,7 @@ import "github.com/charmbracelet/lipgloss"
 
 // Styles contains all the lipgloss styles used throughout the UI.
 type Styles struct {
+	Default   lipgloss.Style
 	Primary   lipgloss.Style
 	Secondary lipgloss.Style
 	Success   lipgloss.Style
@@ -17,6 +18,7 @@ type Styles struct {
 // NewStyles creates a new Styles instance with default color scheme.
 func NewStyles() *Styles {
 	return &Styles{
+		Default:   lipgloss.NewStyle(),
 		Primary:   lipgloss.NewStyle().Foreground(lipgloss.Color("#3B82F6")),
 		Secondary: lipgloss.NewStyle().Foreground(lipgloss.Color("#64748B")),
 		Success:   lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")),
@@ -30,6 +32,7 @@ func NewStyles() *Styles {
 // Icon constants for consistent UI symbols.
 const (
 	IconSuccess = "✓"
+	IconWarning = "⚠"
 	IconError   = "✗"
 	IconInfo    = "→"
 	IconSkipped = "⊘"
