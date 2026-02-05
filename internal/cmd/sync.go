@@ -3,11 +3,12 @@ package cmd
 import (
 	"context"
 	"devctl/internal/config"
+	"devctl/internal/ui"
+	"devctl/internal/ui/component"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/brew"
 	"devctl/pkg/pkgmgr/scoop"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -26,10 +27,15 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 }
 
 func runSync(cfg *config.Config) error {
+	out := ui.NewDefaultOutput()
+
+	detectingSpinner := component.NewSpinner(out)
+	detectingSpinner.Start("Detecting package managers")
+
 	supportedTypes := filterSupportedManagers(cfg.PackageManagers)
 
 	if len(supportedTypes) == 0 {
-		fmt.Println("No supported package managers detected")
+		out.Warning("No supported package managers detected")
 		return nil
 	}
 
@@ -41,24 +47,30 @@ func runSync(cfg *config.Config) error {
 
 		mgr, err := createManager(managerType, mgrConfig.ExecutablePath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to create manager %s: %v\n", managerType, err)
+			out.Warning(fmt.Sprintf("Failed to create manager %s: %v", managerType, err))
 			continue
 		}
 		managers[managerType] = mgr
 	}
 
-	return runSyncWithManagers(cfg, managers)
+	detectingSpinner.Stop()
+
+	return runSyncWithManagers(cfg, managers, out)
 }
 
-func runSyncWithManagers(cfg *config.Config, managers map[pkgmgr.ManagerType]pkgmgr.Manager) error {
+func runSyncWithManagers(cfg *config.Config, managers map[pkgmgr.ManagerType]pkgmgr.Manager, out ui.Output) error {
 	ctx := context.Background()
 	var allNewPackages []config.PackageConfig
 	syncCounts := make(map[pkgmgr.ManagerType]int)
+	var warnings []string
+
+	spinner := component.NewSpinner(out)
+	spinner.Start("Scanning installed packages")
 
 	for managerType, mgr := range managers {
 		packages, err := mgr.List(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to list packages from %s: %v\n", managerType, err)
+			warnings = append(warnings, fmt.Sprintf("Failed to list packages from %s: %v", managerType, err))
 			continue
 		}
 
@@ -69,24 +81,31 @@ func runSyncWithManagers(cfg *config.Config, managers map[pkgmgr.ManagerType]pkg
 		syncCounts[managerType] = len(packages)
 	}
 
+	spinner.Stop()
+	for _, warning := range warnings {
+		out.Warning(warning)
+	}
+
 	cfg.Packages = config.MergePackages(cfg.Packages, allNewPackages)
 
+	saveConfigurationSpinner := component.NewSpinner(out)
+	saveConfigurationSpinner.Start("Saving configuration")
 	if err := config.SaveToFile(cfg, cfg.ConfigDir); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
+	saveConfigurationSpinner.Stop()
 
 	totalSynced := 0
-	for managerType, count := range syncCounts {
+	for _, count := range syncCounts {
 		if count > 0 {
-			fmt.Printf("Synced %d packages from %s\n", count, managerType)
 			totalSynced += count
 		}
 	}
 
 	if totalSynced > 0 {
-		fmt.Printf("Total: %d packages synced\n", totalSynced)
+		out.Printf("Synced %d packages successfully", totalSynced)
 	} else {
-		fmt.Println("No packages to sync")
+		out.Print("No packages to sync")
 	}
 
 	return nil

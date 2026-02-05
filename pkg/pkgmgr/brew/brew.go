@@ -64,10 +64,10 @@ func (m *Manager) List(ctx context.Context) ([]pkgmgr.Package, error) {
 	return packages, nil
 }
 
-func (m *Manager) Install(ctx context.Context, names ...string) error {
+func (m *Manager) Install(_ context.Context, _ ...string) error {
 	return pkgmgr.ErrUnsupported
 }
 
-func (m *Manager) Uninstall(ctx context.Context, names ...string) error {
+func (m *Manager) Uninstall(_ context.Context, _ ...string) error {
 	return pkgmgr.ErrUnsupported
 }
