@@ -58,7 +58,7 @@ func (m prepSpinnerModel) View() string {
 func NewSpinner(output ui.Output) *PreparationSpinner {
 	return &PreparationSpinner{
 		output: output,
-		styles: ui.NewStyles(),
+		styles: ui.DefaultStyles,
 	}
 }
 
