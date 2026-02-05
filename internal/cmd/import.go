@@ -5,8 +5,8 @@ import (
 	"devctl/internal/config"
 	"devctl/internal/formats"
 	"devctl/internal/ui"
-	"devctl/internal/ui/component"
 	"devctl/internal/ui/view"
+	"devctl/internal/ui/widgets"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/scoop"
 	"devctl/pkg/version"
@@ -63,7 +63,7 @@ func runImport(cfg *config.Config, filePath string) error {
 	}
 
 	// Show spinner during cache building phase
-	prepSpinner := component.NewSpinner(output)
+	prepSpinner := widgets.NewSpinner(output)
 	prepSpinner.Start("Preparing context")
 
 	managerCache := make(map[pkgmgr.ManagerType]pkgmgr.Manager)
