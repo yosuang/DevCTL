@@ -4,7 +4,7 @@ import (
 	"context"
 	"devctl/internal/config"
 	"devctl/internal/ui"
-	"devctl/internal/ui/component"
+	"devctl/internal/ui/widgets"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/brew"
 	"devctl/pkg/pkgmgr/scoop"
@@ -29,7 +29,7 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 func runSync(cfg *config.Config) error {
 	out := ui.NewDefaultOutput()
 
-	detectingSpinner := component.NewSpinner(out)
+	detectingSpinner := widgets.NewSpinner(out)
 	detectingSpinner.Start("Detecting package managers")
 
 	supportedTypes := filterSupportedManagers(cfg.PackageManagers)
@@ -64,7 +64,7 @@ func runSyncWithManagers(cfg *config.Config, managers map[pkgmgr.ManagerType]pkg
 	syncCounts := make(map[pkgmgr.ManagerType]int)
 	var warnings []string
 
-	spinner := component.NewSpinner(out)
+	spinner := widgets.NewSpinner(out)
 	spinner.Start("Scanning installed packages")
 
 	for managerType, mgr := range managers {
@@ -88,7 +88,7 @@ func runSyncWithManagers(cfg *config.Config, managers map[pkgmgr.ManagerType]pkg
 
 	cfg.Packages = config.MergePackages(cfg.Packages, allNewPackages)
 
-	saveConfigurationSpinner := component.NewSpinner(out)
+	saveConfigurationSpinner := widgets.NewSpinner(out)
 	saveConfigurationSpinner.Start("Saving configuration")
 	if err := config.SaveToFile(cfg, cfg.ConfigDir); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)

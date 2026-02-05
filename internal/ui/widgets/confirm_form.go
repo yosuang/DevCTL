@@ -1,4 +1,4 @@
-package component
+package widgets
 
 import (
 	"github.com/charmbracelet/huh"

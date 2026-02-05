@@ -1,4 +1,4 @@
-package component
+package widgets
 
 import (
 	"devctl/internal/ui"
