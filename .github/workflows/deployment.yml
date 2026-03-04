@@ -169,7 +169,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Merge built artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
       - name: Prepare release assets
         env:
           TAG_NAME: ${{ inputs.tag_name }}
