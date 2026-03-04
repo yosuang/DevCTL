@@ -36,6 +36,11 @@ linters:
 
     warn-unused: true
 
+    rules:
+      - path: pkg/version/
+        linters:
+          - revive
+
     presets:
       - comments
       - std-error-handling
