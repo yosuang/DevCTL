@@ -8,13 +8,6 @@ fi
 
 for asset; do
   label="$(basename "$asset")"
-  label="${label%.*}"
-  label="${label%.tar}"
-  label="DevCTL $(tr '_' ' ' <<<"${label#devctl_}")"
-  case "$asset" in
-  *.msi ) label="${label} installer" ;;
-  *.deb ) label="${label} deb" ;;
-  *.rpm ) label="${label} RPM" ;;
-  esac
+  label="DevCTL-$(tr '_' '-' <<<"${label#devctl_}")"
   printf '"%s#%s"\n' "$asset" "$label"
 done
