@@ -25,8 +25,7 @@ func TestLoadFromFile(t *testing.T) {
 		configPath := filepath.Join(tempDir, "devctl.json")
 
 		configContent := `{
-  "dataDir": "/custom/data",
-  "configDir": "/custom/config"
+  "dataDir": "/custom/data"
 }`
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
 		require.NoError(t, err)
@@ -36,7 +35,6 @@ func TestLoadFromFile(t *testing.T) {
 		assert.NoError(t, err)
 		require.NotNil(t, cfg)
 		assert.Equal(t, "/custom/data", cfg.DataDir)
-		assert.Equal(t, "/custom/config", cfg.ConfigDir)
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {
@@ -61,8 +59,7 @@ func TestSaveToFile(t *testing.T) {
 		configDir := filepath.Join(tempDir, "subdir")
 
 		cfg := &Config{
-			DataDir:   "/test/data",
-			ConfigDir: "/test/config",
+			DataDir: "/test/data",
 		}
 
 		err := SaveToFile(cfg, configDir)
@@ -75,7 +72,6 @@ func TestSaveToFile(t *testing.T) {
 		loadedCfg, err := LoadFromFile(configDir)
 		require.NoError(t, err)
 		assert.Equal(t, cfg.DataDir, loadedCfg.DataDir)
-		assert.Equal(t, cfg.ConfigDir, loadedCfg.ConfigDir)
 	})
 
 	t.Run("overwrites existing config file", func(t *testing.T) {
