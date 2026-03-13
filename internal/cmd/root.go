@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	initcmd "devctl/internal/cmd/init"
 	"devctl/internal/config"
 	"devctl/internal/logging"
 	"devctl/pkg/cmdutil"
@@ -23,18 +22,20 @@ func NewCmdRoot() (*cobra.Command, error) {
 		Short:        "Development CLI",
 		Long:         `Development CLI`,
 		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			setupLogging(cfg)
+			return nil
+		},
 	}
 
 	cfg.AddFlags(cmd.PersistentFlags())
 
-	setupLogging(cfg)
-
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
 
-	cmd.AddCommand(initcmd.NewCmd(cfg))
-	cmd.AddCommand(NewCmdImport(cfg))
-	cmd.AddCommand(NewCmdExport(cfg))
-	cmd.AddCommand(NewCmdSync(cfg))
+	// subcommands
 
 	return cmd, nil
 }
@@ -47,7 +48,7 @@ func rootFlagErrorFunc(_ *cobra.Command, err error) error {
 }
 
 func setupLogging(cfg *config.Config) {
-	logDir := filepath.Join(cfg.DataDir, "logs")
+	logDir := cfg.LogDir()
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		fmt.Printf("Failed to create log dir: %s, error: %v", logDir, err)
 		os.Exit(1)

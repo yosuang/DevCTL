@@ -1,4 +1,4 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
 
 exe := if os() == "windows" { ".exe" } else { "" }
 
@@ -12,6 +12,9 @@ build: _build-script
 
 clean: _build-script
     @./script/build{{exe}} clean
+
+lint:
+    golangci-lint.exe fmt && golangci-lint.exe run --fix
 
 test:
     go test ./...
