@@ -1,6 +1,10 @@
-.claude/settings.local.json
-.serena/
-.sisyphus/
+*.local.json
+skills-lock.json
+
+# Agent
+.agents/
+.claude/
+.opencode/
 
 # IDE
 .idea/
@@ -10,5 +14,5 @@
 /bin
 /dist
 /.goreleaser.generated.yml
-
-*.local.json
+/script/build
+/script/build.exe
