@@ -36,6 +36,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
 
 	// subcommands
+	cmd.AddCommand(NewCmdVault(cfg))
 
 	return cmd, nil
 }
