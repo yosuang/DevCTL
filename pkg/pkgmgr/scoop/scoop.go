@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -77,6 +79,21 @@ func (m *Manager) Uninstall(ctx context.Context, names ...string) error {
 			Cmd:    m.execPath + " " + strings.Join(args, " "),
 			Stderr: errStr,
 			Err:    err,
+		}
+	}
+	return nil
+}
+
+// InstallPackages installs packages with optional version specifications.
+// Scoop does not natively support version pinning in the install command,
+// so packages are installed by name only.
+func (m *Manager) InstallPackages(ctx context.Context, packages []pkgmgr.PackageSpec) error {
+	for _, pkg := range packages {
+		if err := m.Install(ctx, pkg.Name); err != nil {
+			if errors.Is(err, pkgmgr.ErrAlreadyInstalled) {
+				continue
+			}
+			return fmt.Errorf("installing %s: %w", pkg.Name, err)
 		}
 	}
 	return nil

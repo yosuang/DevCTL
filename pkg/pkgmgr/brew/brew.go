@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"strings"
 
 	"devctl/pkg/pkgmgr"
 )
@@ -66,6 +67,33 @@ func (m *Manager) List(ctx context.Context) ([]pkgmgr.Package, error) {
 
 func (m *Manager) Install(_ context.Context, _ ...string) error {
 	return pkgmgr.ErrUnsupported
+}
+
+// InstallPackages installs packages with optional version specifications.
+// For versioned packages, brew uses the name@version formula format.
+func (m *Manager) InstallPackages(ctx context.Context, packages []pkgmgr.PackageSpec) error {
+	for _, pkg := range packages {
+		name := pkg.Name
+		if pkg.Version != "" {
+			name = pkg.Name + "@" + pkg.Version
+		}
+		args := []string{"install", name}
+		cmd := m.execCommand(ctx, m.execPath, args...)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			errStr := stderr.String()
+			if strings.Contains(errStr, "already installed") {
+				continue
+			}
+			return &pkgmgr.ExecutionError{
+				Cmd:    m.execPath + " " + strings.Join(args, " "),
+				Stderr: errStr,
+				Err:    err,
+			}
+		}
+	}
+	return nil
 }
 
 func (m *Manager) Uninstall(_ context.Context, _ ...string) error {

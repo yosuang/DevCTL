@@ -2,6 +2,7 @@ package pkgmgr
 
 import (
 	"runtime"
+	"slices"
 )
 
 // Platform represents an operating system platform.
@@ -13,13 +14,13 @@ const (
 	PlatformLinux   Platform = "linux"
 )
 
-// GetCurrent returns the current platform.
-func GetCurrent() Platform {
+// CurrentPlatform returns the current platform.
+func CurrentPlatform() Platform {
 	return Platform(runtime.GOOS)
 }
 
-// GetSupportedManagers returns the list of package managers supported on the given platform.
-func GetSupportedManagers(p Platform) []ManagerType {
+// GetSupportedManagerTypes returns the list of package managers supported on the given platform.
+func GetSupportedManagerTypes(p Platform) []ManagerType {
 	switch p {
 	case PlatformWindows:
 		return []ManagerType{
@@ -41,13 +42,13 @@ func GetSupportedManagers(p Platform) []ManagerType {
 	}
 }
 
+// GetCurrentPlatformManagerTypes returns the list of package managers supported on the current platform.
+func GetCurrentPlatformManagerTypes() []ManagerType {
+	return GetSupportedManagerTypes(CurrentPlatform())
+}
+
 // IsManagerSupported checks if a package manager is supported on the given platform.
 func IsManagerSupported(mgr ManagerType, p Platform) bool {
-	supported := GetSupportedManagers(p)
-	for _, m := range supported {
-		if m == mgr {
-			return true
-		}
-	}
-	return false
+	supported := GetSupportedManagerTypes(p)
+	return slices.Contains(supported, mgr)
 }

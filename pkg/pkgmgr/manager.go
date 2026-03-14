@@ -14,10 +14,18 @@ type Package struct {
 	Source string
 }
 
+// PackageSpec describes a package to install with an optional version.
+type PackageSpec struct {
+	Name    string
+	Version string // optional, empty means latest
+}
+
 // Manager defines the interface for package management operations.
 type Manager interface {
 	// Install installs one or more packages by name.
 	Install(ctx context.Context, names ...string) error
+	// InstallPackages installs packages with optional version specifications.
+	InstallPackages(ctx context.Context, packages []PackageSpec) error
 	// Uninstall uninstalls one or more packages by name.
 	Uninstall(ctx context.Context, names ...string) error
 	// List returns a list of currently installed packages.
