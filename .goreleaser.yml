@@ -19,6 +19,8 @@ builds:
     main: ./cmd/devctl
     ldflags:
       - -s -w
+      - -X devctl/internal/build.Version={{.Version}}
+      - -X devctl/internal/build.BuildDate={{time "2000-01-01"}}
 
   - id: linux #build:linux
     goos: [linux]
@@ -29,6 +31,8 @@ builds:
     main: ./cmd/devctl
     ldflags:
       - -s -w
+      - -X devctl/internal/build.Version={{.Version}}
+      - -X devctl/internal/build.BuildDate={{time "2000-01-01"}}
 
   - id: windows #build:windows
     goos: [windows]
@@ -37,6 +41,8 @@ builds:
     main: ./cmd/devctl
     ldflags:
       - -s -w
+      - -X devctl/internal/build.Version={{.Version}}
+      - -X devctl/internal/build.BuildDate={{time "2000-01-01"}}
 
 archives:
   - id: linux-archive

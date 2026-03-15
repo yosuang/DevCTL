@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"devctl/internal/build"
 	"devctl/internal/config"
 	"devctl/internal/logging"
 	"devctl/pkg/cmdutil"
@@ -22,6 +23,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 		Use:          "devctl <command> <subcommand> [flags]",
 		Short:        "Development CLI",
 		Long:         `Development CLI`,
+		Version:      build.FormatVersion(),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -36,15 +38,15 @@ func NewCmdRoot() (*cobra.Command, error) {
 		&cobra.Group{ID: "core", Title: "Core Commands"},
 		&cobra.Group{ID: "display", Title: "Display Commands"},
 	)
+	cmd.SetHelpCommandGroupID("display")
+	cmd.SetCompletionCommandGroupID("display")
 
 	cfg.AddFlags(cmd.PersistentFlags())
 
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
+	cmd.SetVersionTemplate("{{.Version}}\n")
 	cmd.SetUsageTemplate(usageTemplate)
-	cmd.SetHelpCommandGroupID("display")
-	cmd.SetCompletionCommandGroupID("display")
 
-	// subcommands
 	cmd.AddCommand(NewCmdVault(cfg))
 	cmd.AddCommand(NewCmdKit(cfg))
 
