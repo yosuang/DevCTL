@@ -31,6 +31,7 @@ type Manifest struct {
 type PackageEntry struct {
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
+	Manager string `json:"manager,omitempty"`
 }
 
 type ConfigEntry struct {
@@ -152,7 +153,7 @@ func (k *Kit) UnsetVar(key string) error {
 	return k.Save(m)
 }
 
-func (k *Kit) AddPackage(name, version, group string) error {
+func (k *Kit) AddPackage(name, version, group, manager string) error {
 	if group == "" {
 		group = "base"
 	}
@@ -171,6 +172,7 @@ func (k *Kit) AddPackage(name, version, group string) error {
 	m.Packages[group] = append(m.Packages[group], PackageEntry{
 		Name:    name,
 		Version: version,
+		Manager: manager,
 	})
 	return k.Save(m)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"devctl/internal/config"
 	"devctl/internal/kit"
@@ -125,26 +126,36 @@ func newCmdKitApply(kitDir, vaultDir string) *cobra.Command {
 				targetGroups = sortedKeys(m.Packages)
 			}
 
-			// Collect packages to install
-			var specs []pkgmgr.PackageSpec
+			// Collect packages grouped by manager
+			type specWithManager struct {
+				spec    pkgmgr.PackageSpec
+				manager string
+			}
+			var all []specWithManager
 			for _, g := range targetGroups {
 				for _, p := range m.Packages[g] {
-					specs = append(specs, pkgmgr.PackageSpec{
-						Name:    p.Name,
-						Version: p.Version,
+					all = append(all, specWithManager{
+						spec: pkgmgr.PackageSpec{
+							Name:    p.Name,
+							Version: p.Version,
+						},
+						manager: p.Manager,
 					})
 				}
 			}
 
 			if dryRun {
-				if len(specs) > 0 {
+				if len(all) > 0 {
 					fmt.Fprintln(os.Stderr, "Would install:")
-					for _, s := range specs {
-						if s.Version != "" {
-							fmt.Fprintf(os.Stderr, "  %s@%s\n", s.Name, s.Version)
-						} else {
-							fmt.Fprintf(os.Stderr, "  %s\n", s.Name)
+					for _, s := range all {
+						label := s.spec.Name
+						if s.spec.Version != "" {
+							label += "@" + s.spec.Version
 						}
+						if s.manager != "" {
+							label += " (via " + s.manager + ")"
+						}
+						fmt.Fprintf(os.Stderr, "  %s\n", label)
 					}
 				}
 				configNames := sortedKeys(m.Configs)
@@ -157,18 +168,36 @@ func newCmdKitApply(kitDir, vaultDir string) *cobra.Command {
 				return nil
 			}
 
-			// Install packages
-			if len(specs) > 0 {
-				mgr, mgrErr := detectManager()
-				if mgrErr != nil {
-					fmt.Fprintf(os.Stderr, "Warning: %v, skipping package installation\n", mgrErr)
+			// Group packages by manager for installation
+			grouped := make(map[string][]pkgmgr.PackageSpec)
+			for _, s := range all {
+				grouped[s.manager] = append(grouped[s.manager], s.spec)
+			}
+
+			for _, mgrKey := range sortedKeys(grouped) {
+				specs := grouped[mgrKey]
+				var mgr pkgmgr.Manager
+				var mgrErr error
+				if mgrKey == "" {
+					mgr, mgrErr = detectManager()
 				} else {
-					fmt.Fprintln(os.Stderr, "Installing packages...")
-					if err := mgr.InstallPackages(cmd.Context(), specs); err != nil {
-						return fmt.Errorf("installing packages: %w", err)
-					}
-					fmt.Fprintln(os.Stderr, "Packages installed.")
+					mgr, mgrErr = managerByType(pkgmgr.ManagerType(mgrKey))
 				}
+				if mgrErr != nil {
+					fmt.Fprintf(os.Stderr, "Warning: %v, skipping %d package(s)\n", mgrErr, len(specs))
+					continue
+				}
+				mgrName := mgrKey
+				if mgrName == "" {
+					mgrName = "auto-detected"
+				}
+				fmt.Fprintf(os.Stderr, "Installing packages via %s...\n", mgrName)
+				if err := mgr.InstallPackages(cmd.Context(), specs); err != nil {
+					return fmt.Errorf("installing packages via %s: %w", mgrName, err)
+				}
+			}
+			if len(grouped) > 0 {
+				fmt.Fprintln(os.Stderr, "Packages installed.")
 			}
 
 			// Compile configs
@@ -194,27 +223,37 @@ func newCmdKitApply(kitDir, vaultDir string) *cobra.Command {
 func newCmdKitAdd(kitDir string) *cobra.Command {
 	var version string
 	var group string
+	var manager string
 
 	cmd := &cobra.Command{
-		Use:   "add <name>",
+		Use:   "add <name[@version]>",
 		Short: "Add a package to a group",
 		Args:  cmdutil.ExactArgs(1, "package name is required"),
 		RunE: func(_ *cobra.Command, args []string) error {
+			name, inlineVer := parsePackageArg(args[0])
+			if inlineVer != "" && version != "" {
+				return fmt.Errorf("ambiguous version: both inline @%s and --version %s specified", inlineVer, version)
+			}
+			if inlineVer != "" {
+				version = inlineVer
+			}
+
 			k := kit.New(kitDir)
-			if err := k.AddPackage(args[0], version, group); err != nil {
+			if err := k.AddPackage(name, version, group, manager); err != nil {
 				return kitError(err)
 			}
 			g := group
 			if g == "" {
 				g = "base"
 			}
-			fmt.Fprintf(os.Stderr, "Added %s to group %s\n", args[0], g)
+			fmt.Fprintf(os.Stderr, "Added %s to group %s\n", name, g)
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&version, "version", "", "exact version to install")
 	cmd.Flags().StringVar(&group, "group", "", "package group (default: base)")
+	cmd.Flags().StringVar(&manager, "manager", "", "package manager to use (e.g., scoop, brew)")
 
 	return cmd
 }
@@ -369,11 +408,14 @@ func newCmdKitList(kitDir string) *cobra.Command {
 					for _, group := range groups {
 						fmt.Fprintf(os.Stderr, "  %s:\n", group)
 						for _, p := range m.Packages[group] {
+							label := p.Name
 							if p.Version != "" {
-								fmt.Fprintf(os.Stderr, "    %s@%s\n", p.Name, p.Version)
-							} else {
-								fmt.Fprintf(os.Stderr, "    %s\n", p.Name)
+								label += "@" + p.Version
 							}
+							if p.Manager != "" {
+								label += " [" + p.Manager + "]"
+							}
+							fmt.Fprintf(os.Stderr, "    %s\n", label)
 						}
 					}
 				}
@@ -445,6 +487,33 @@ func detectManager() (pkgmgr.Manager, error) {
 		}
 	}
 	return nil, fmt.Errorf("no supported package manager found")
+}
+
+func parsePackageArg(arg string) (name, version string) {
+	if i := strings.LastIndex(arg, "@"); i > 0 {
+		return arg[:i], arg[i+1:]
+	}
+	return arg, ""
+}
+
+func managerByType(mt pkgmgr.ManagerType) (pkgmgr.Manager, error) {
+	if !pkgmgr.IsManagerSupported(mt, pkgmgr.CurrentPlatform()) {
+		return nil, fmt.Errorf("package manager %q is not supported on this platform", mt)
+	}
+	switch mt {
+	case pkgmgr.ManagerTypeScoop:
+		if !executil.IsInstalled("scoop") {
+			return nil, fmt.Errorf("scoop is not installed")
+		}
+		return scoop.New(nil), nil
+	case pkgmgr.ManagerTypeBrew:
+		if !executil.IsInstalled("brew") {
+			return nil, fmt.Errorf("brew is not installed")
+		}
+		return brew.New(nil), nil
+	default:
+		return nil, fmt.Errorf("unsupported package manager: %s", mt)
+	}
 }
 
 // sortedKeys returns sorted keys from a map (generic helper for map[string]T).

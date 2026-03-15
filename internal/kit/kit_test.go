@@ -82,7 +82,7 @@ func TestAddPackage(t *testing.T) {
 	k := New(filepath.Join(t.TempDir(), "kit"))
 
 	// #when: adding a package without group
-	err := k.AddPackage("git", "1.28", "")
+	err := k.AddPackage("git", "1.28", "", "")
 
 	// #then: added to "base" group
 	require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestAddPackage_WithGroup(t *testing.T) {
 	k := New(filepath.Join(t.TempDir(), "kit"))
 
 	// #when: adding a package to a specific group
-	err := k.AddPackage("kubectl", "", "work")
+	err := k.AddPackage("kubectl", "", "work", "")
 
 	// #then: added to the specified group
 	require.NoError(t, err)
@@ -112,10 +112,10 @@ func TestAddPackage_WithGroup(t *testing.T) {
 func TestAddPackage_Duplicate(t *testing.T) {
 	// #given: a kit with an existing package
 	k := New(filepath.Join(t.TempDir(), "kit"))
-	require.NoError(t, k.AddPackage("git", "", ""))
+	require.NoError(t, k.AddPackage("git", "", "", ""))
 
 	// #when: adding the same package again
-	err := k.AddPackage("git", "2.0", "")
+	err := k.AddPackage("git", "2.0", "", "")
 
 	// #then: returns ErrPackageExists
 	require.ErrorIs(t, err, ErrPackageExists)
@@ -124,8 +124,8 @@ func TestAddPackage_Duplicate(t *testing.T) {
 func TestRemovePackage(t *testing.T) {
 	// #given: a kit with packages
 	k := New(filepath.Join(t.TempDir(), "kit"))
-	require.NoError(t, k.AddPackage("git", "", ""))
-	require.NoError(t, k.AddPackage("jq", "", ""))
+	require.NoError(t, k.AddPackage("git", "", "", ""))
+	require.NoError(t, k.AddPackage("jq", "", "", ""))
 
 	// #when: removing one package
 	err := k.RemovePackage("git", "")
@@ -141,7 +141,7 @@ func TestRemovePackage(t *testing.T) {
 func TestRemovePackage_LastInGroup(t *testing.T) {
 	// #given: a kit with one package in a group
 	k := New(filepath.Join(t.TempDir(), "kit"))
-	require.NoError(t, k.AddPackage("git", "", ""))
+	require.NoError(t, k.AddPackage("git", "", "", ""))
 
 	// #when: removing the last package in the group
 	err := k.RemovePackage("git", "")
@@ -156,7 +156,7 @@ func TestRemovePackage_LastInGroup(t *testing.T) {
 func TestRemovePackage_NotFound(t *testing.T) {
 	// #given: a kit with packages
 	k := New(filepath.Join(t.TempDir(), "kit"))
-	require.NoError(t, k.AddPackage("git", "", ""))
+	require.NoError(t, k.AddPackage("git", "", "", ""))
 
 	// #when: removing a non-existent package
 	err := k.RemovePackage("vim", "")
@@ -213,6 +213,41 @@ func TestLoad_NotFound(t *testing.T) {
 
 	// #then: returns ErrManifestNotFound
 	require.ErrorIs(t, err, ErrManifestNotFound)
+}
+
+func TestAddPackage_WithManager(t *testing.T) {
+	// #given: an empty kit
+	k := New(filepath.Join(t.TempDir(), "kit"))
+
+	// #when: adding a package with a specific manager
+	err := k.AddPackage("git", "2.40", "", "scoop")
+
+	// #then: manager is persisted in manifest
+	require.NoError(t, err)
+	m, err := k.Load()
+	require.NoError(t, err)
+	require.Len(t, m.Packages["base"], 1)
+	require.Equal(t, "git", m.Packages["base"][0].Name)
+	require.Equal(t, "2.40", m.Packages["base"][0].Version)
+	require.Equal(t, "scoop", m.Packages["base"][0].Manager)
+}
+
+func TestLoad_BackwardCompat_NoManager(t *testing.T) {
+	// #given: a manifest saved without the manager field (old format)
+	k := New(filepath.Join(t.TempDir(), "kit"))
+	m := &Manifest{
+		Vars:     map[string]string{},
+		Packages: map[string][]PackageEntry{"base": {{Name: "git", Version: "2.40"}}},
+		Configs:  map[string]ConfigEntry{},
+	}
+	require.NoError(t, k.Save(m))
+
+	// #when: loading the manifest
+	loaded, err := k.Load()
+
+	// #then: manager defaults to empty string
+	require.NoError(t, err)
+	require.Equal(t, "", loaded.Packages["base"][0].Manager)
 }
 
 func TestSaveAndLoad(t *testing.T) {
