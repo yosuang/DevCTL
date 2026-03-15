@@ -35,11 +35,11 @@ func NewCmdRoot() (*cobra.Command, error) {
 	}
 
 	cmd.AddGroup(
-		&cobra.Group{ID: "core", Title: "Core Commands"},
-		&cobra.Group{ID: "display", Title: "Display Commands"},
+		&cobra.Group{ID: "core", Title: "Core Commands:"},
+		&cobra.Group{ID: "hidden", Title: ""},
 	)
-	cmd.SetHelpCommandGroupID("display")
-	cmd.SetCompletionCommandGroupID("display")
+	cmd.SetHelpCommandGroupID("hidden")
+	cmd.SetCompletionCommandGroupID("hidden")
 
 	cfg.AddFlags(cmd.PersistentFlags())
 
@@ -90,7 +90,7 @@ Aliases:
   {{.NameAndAliases}}{{end}}{{if .HasExample}}
 
 Examples:
-{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{if .Groups}}{{range $group := .Groups}}{{if (ne $group.ID "display")}}
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{if .Groups}}{{range $group := .Groups}}{{if (ne $group.ID "hidden")}}
 
 {{.Title}}{{range $.Commands}}{{if (and (eq .GroupID $group.ID) .IsAvailableCommand)}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{else}}
@@ -104,7 +104,7 @@ Flags:
 Global Flags:
 {{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
 
-Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+Additional Help Topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
 
 
