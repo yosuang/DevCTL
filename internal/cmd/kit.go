@@ -126,6 +126,20 @@ func newCmdKitApply(kitDir, vaultDir string) *cobra.Command {
 				targetGroups = sortedKeys(m.Packages)
 			}
 
+			// Warn about unknown groups
+			if len(groups) > 0 {
+				for _, g := range targetGroups {
+					if _, ok := m.Packages[g]; !ok {
+						available := sortedKeys(m.Packages)
+						if len(available) > 0 {
+							fmt.Fprintf(os.Stderr, "Warning: group %q not found in manifest (available: %s)\n", g, strings.Join(available, ", "))
+						} else {
+							fmt.Fprintf(os.Stderr, "Warning: group %q not found in manifest (no groups defined)\n", g)
+						}
+					}
+				}
+			}
+
 			// Collect packages grouped by manager
 			type specWithManager struct {
 				spec    pkgmgr.PackageSpec
