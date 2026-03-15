@@ -26,8 +26,9 @@ func NewCmdKit(cfg *config.Config) *cobra.Command {
 	vaultDir := filepath.Join(cfg.ConfigDir, "vault")
 
 	cmd := &cobra.Command{
-		Use:   "kit <command>",
-		Short: "Manage development environment",
+		Use:     "kit <command>",
+		Short:   "Manage development environment",
+		GroupID: "core",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},

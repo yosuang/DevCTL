@@ -21,8 +21,9 @@ func NewCmdVault(cfg *config.Config) *cobra.Command {
 	vaultDir := filepath.Join(cfg.ConfigDir, "vault")
 
 	cmd := &cobra.Command{
-		Use:   "vault <command>",
-		Short: "Manage encrypted secrets",
+		Use:     "vault <command>",
+		Short:   "Manage encrypted secrets",
+		GroupID: "core",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/MakeNowJust/heredoc"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -18,7 +19,7 @@ var cfg = config.Init()
 
 func NewCmdRoot() (*cobra.Command, error) {
 	cmd := &cobra.Command{
-		Use:          "devctl",
+		Use:          "devctl <command> <subcommand> [flags]",
 		Short:        "Development CLI",
 		Long:         `Development CLI`,
 		SilenceUsage: true,
@@ -31,9 +32,17 @@ func NewCmdRoot() (*cobra.Command, error) {
 		},
 	}
 
+	cmd.AddGroup(
+		&cobra.Group{ID: "core", Title: "Core Commands"},
+		&cobra.Group{ID: "display", Title: "Display Commands"},
+	)
+
 	cfg.AddFlags(cmd.PersistentFlags())
 
 	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
+	cmd.SetUsageTemplate(usageTemplate)
+	cmd.SetHelpCommandGroupID("display")
+	cmd.SetCompletionCommandGroupID("display")
 
 	// subcommands
 	cmd.AddCommand(NewCmdVault(cfg))
@@ -71,3 +80,31 @@ type CommandError struct {
 	error
 	ExitCode int
 }
+
+var usageTemplate = heredoc.Docf(`Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if gt (len .Aliases) 0}}
+
+Aliases:
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{if .Groups}}{{range $group := .Groups}}{{if (ne $group.ID "display")}}
+
+{{.Title}}{{range $.Commands}}{{if (and (eq .GroupID $group.ID) .IsAvailableCommand)}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{else}}
+
+Available Commands:{{range .Commands}}{{if .IsAvailableCommand}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+
+Use %[1]sdevctl <command> <subcommand> --help%[1]s for more information about a command.{{end}}
+`, "`")
