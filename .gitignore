@@ -5,6 +5,7 @@ skills-lock.json
 .agents/
 .claude/
 .opencode/
+.pi/
 
 # IDE
 .idea/
