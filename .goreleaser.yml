@@ -20,7 +20,7 @@ builds:
     ldflags:
       - -s -w
       - -X devctl/internal/build.Version={{.Version}}
-      - -X devctl/internal/build.BuildDate={{time "2000-01-01"}}
+      - -X devctl/internal/build.BuildDate={{time "2006-01-02"}}
 
   - id: linux #build:linux
     goos: [linux]
@@ -32,7 +32,7 @@ builds:
     ldflags:
       - -s -w
       - -X devctl/internal/build.Version={{.Version}}
-      - -X devctl/internal/build.BuildDate={{time "2000-01-01"}}
+      - -X devctl/internal/build.BuildDate={{time "2006-01-02"}}
 
   - id: windows #build:windows
     goos: [windows]
@@ -42,7 +42,7 @@ builds:
     ldflags:
       - -s -w
       - -X devctl/internal/build.Version={{.Version}}
-      - -X devctl/internal/build.BuildDate={{time "2000-01-01"}}
+      - -X devctl/internal/build.BuildDate={{time "2006-01-02"}}
 
 archives:
   - id: linux-archive
