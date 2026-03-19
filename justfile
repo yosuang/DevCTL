@@ -7,6 +7,10 @@ export CGO_CFLAGS := env_var_or_default("CGO_CFLAGS", env_var_or_default("CFLAGS
 _cgo_ldflags_filtered := if os() == "windows" { "" } else { `printf '%s\n' ${LDFLAGS:-} | grep -E '^(-g$|-L|-l|-O)' | tr '\n' ' ' || true` }
 export CGO_LDFLAGS := env_var_or_default("CGO_LDFLAGS", _cgo_ldflags_filtered)
 
+[private]
+default:
+  @just --list
+
 build: _build-script
     @./script/build{{exe}} bin/devctl{{exe}}
 
