@@ -19,6 +19,7 @@ const (
 	vaultFile    = "vault.age"
 	dirPerm      = 0700
 	filePerm     = 0600
+	envSecretKey = "DEVCTL_SECRET_KEY"
 )
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$`)
@@ -40,14 +41,17 @@ func (v *Vault) Init() error {
 		return fmt.Errorf("creating vault directory: %w", err)
 	}
 
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		return fmt.Errorf("generating identity: %w", err)
-	}
+	// Skip generating identity file when env var provides the key
+	if os.Getenv(envSecretKey) == "" {
+		identity, err := age.GenerateX25519Identity()
+		if err != nil {
+			return fmt.Errorf("generating identity: %w", err)
+		}
 
-	identityData := identity.String() + "\n"
-	if err := os.WriteFile(v.identityPath(), []byte(identityData), filePerm); err != nil {
-		return fmt.Errorf("writing identity: %w", err)
+		identityData := identity.String() + "\n"
+		if err := os.WriteFile(v.identityPath(), []byte(identityData), filePerm); err != nil {
+			return fmt.Errorf("writing identity: %w", err)
+		}
 	}
 
 	empty := map[string]string{}
@@ -131,9 +135,13 @@ func (v *Vault) List() ([]string, error) {
 }
 
 func (v *Vault) IsInitialized() bool {
-	_, err1 := os.Stat(v.identityPath())
-	_, err2 := os.Stat(v.vaultPath())
-	return err1 == nil && err2 == nil
+	hasIdentity := os.Getenv(envSecretKey) != ""
+	if !hasIdentity {
+		_, err := os.Stat(v.identityPath())
+		hasIdentity = err == nil
+	}
+	_, err := os.Stat(v.vaultPath())
+	return hasIdentity && err == nil
 }
 
 // --- internal helpers ---
@@ -154,12 +162,19 @@ func (v *Vault) vaultPath() string {
 }
 
 func (v *Vault) loadIdentity() (*age.X25519Identity, error) {
+	if envKey := os.Getenv(envSecretKey); envKey != "" {
+		return parseIdentity([]byte(envKey))
+	}
+
 	data, err := os.ReadFile(v.identityPath())
 	if err != nil {
 		return nil, fmt.Errorf("reading identity: %w", err)
 	}
+	return parseIdentity(data)
+}
 
-	identities, err := age.ParseIdentities(bytes.NewReader(data))
+func parseIdentity(data []byte) (*age.X25519Identity, error) {
+	identities, err := age.ParseIdentities(bytes.NewReader(bytes.TrimSpace(data)))
 	if err != nil {
 		return nil, fmt.Errorf("parsing identity: %w", err)
 	}

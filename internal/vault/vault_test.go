@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"filippo.io/age"
 	"github.com/stretchr/testify/require"
 )
 
@@ -169,6 +170,73 @@ func TestValidateKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInit_WithEnvKey(t *testing.T) {
+	// #given: DEVCTL_SECRET_KEY is set
+	identity, err := age.GenerateX25519Identity()
+	require.NoError(t, err)
+	t.Setenv(envSecretKey, identity.String())
+
+	v := New(filepath.Join(t.TempDir(), "vault"))
+
+	// #when: init vault
+	err = v.Init()
+
+	// #then: succeeds, vault.age exists but no identity file
+	require.NoError(t, err)
+	require.NoFileExists(t, v.identityPath())
+	require.FileExists(t, v.vaultPath())
+}
+
+func TestSetGet_WithEnvKey(t *testing.T) {
+	// #given: a vault initialized with DEVCTL_SECRET_KEY
+	identity, err := age.GenerateX25519Identity()
+	require.NoError(t, err)
+	t.Setenv(envSecretKey, identity.String())
+
+	v := New(filepath.Join(t.TempDir(), "vault"))
+	require.NoError(t, v.Init())
+
+	// #when: set and get a key
+	require.NoError(t, v.Set("MY_TOKEN", "secret123"))
+	got, err := v.Get(context.Background(), "MY_TOKEN")
+
+	// #then: returns the stored value
+	require.NoError(t, err)
+	require.Equal(t, "secret123", got)
+}
+
+func TestIsInitialized_WithEnvKey(t *testing.T) {
+	// #given: DEVCTL_SECRET_KEY is set, vault.age exists, no identity file
+	identity, err := age.GenerateX25519Identity()
+	require.NoError(t, err)
+	t.Setenv(envSecretKey, identity.String())
+
+	v := New(filepath.Join(t.TempDir(), "vault"))
+	require.NoError(t, v.Init())
+
+	// #then: IsInitialized returns true without identity file
+	require.True(t, v.IsInitialized())
+	require.NoFileExists(t, v.identityPath())
+}
+
+func TestEnvKey_OverridesFile(t *testing.T) {
+	// #given: a vault initialized with file-based identity
+	v := New(filepath.Join(t.TempDir(), "vault"))
+	require.NoError(t, v.Init())
+	require.NoError(t, v.Set("MY_TOKEN", "secret123"))
+
+	// #given: now set a different key via env var
+	newIdentity, err := age.GenerateX25519Identity()
+	require.NoError(t, err)
+	t.Setenv(envSecretKey, newIdentity.String())
+
+	// #when: try to decrypt with the env key (which is different from file key)
+	_, err = v.Get(context.Background(), "MY_TOKEN")
+
+	// #then: decryption fails because env key overrides file key
+	require.Error(t, err)
 }
 
 func TestOperations_NotInitialized(t *testing.T) {
