@@ -469,17 +469,17 @@ func secretGetter(vaultDir string) kit.SecretGetter {
 func kitError(err error) error {
 	switch {
 	case errors.Is(err, kit.ErrManifestNotFound):
-		return fmt.Errorf("kit not initialized\nRun: devctl kit set <KEY> <VALUE>  or  devctl kit add <package>  to get started")
+		return fmt.Errorf("kit not initialized\nRun: `devctl kit set <KEY> <VALUE>` or `devctl kit add <package>` to get started")
 	case errors.Is(err, kit.ErrAlreadyTracked):
 		return fmt.Errorf("config already tracked")
 	case errors.Is(err, kit.ErrNotTracked):
-		return fmt.Errorf("config not tracked\nRun: devctl kit list --configs    (to see tracked configs)")
+		return fmt.Errorf("config not tracked\nRun: `devctl kit list --configs` (to see tracked configs)")
 	case errors.Is(err, kit.ErrInvalidKeyName):
 		return fmt.Errorf("invalid key — must be UPPER_SNAKE_CASE (e.g., GIT_USER_NAME)")
 	case errors.Is(err, kit.ErrPackageExists):
 		return fmt.Errorf("package already exists in group")
 	case errors.Is(err, kit.ErrPackageNotFound):
-		return fmt.Errorf("package not found in group\nRun: devctl kit list --packages    (to see packages)")
+		return fmt.Errorf("package not found in group\nRun: `devctl kit list --packages` (to see packages)")
 	default:
 		return err
 	}
