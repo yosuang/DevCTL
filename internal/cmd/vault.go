@@ -142,12 +142,14 @@ func newCmdVaultList(vaultDir string) *cobra.Command {
 
 func vaultError(err error) error {
 	switch {
-	case errors.Is(err, vault.ErrNotInitialized):
-		return fmt.Errorf("vault not initialized\nRun: devctl vault init")
-	case errors.Is(err, vault.ErrAlreadyInitialized):
-		return fmt.Errorf("vault already initialized")
+	case errors.Is(err, vault.ErrIdentityNotFound):
+		return fmt.Errorf("%w\nRun: `devctl init` or set DEVCTL_SECRET_KEY env var", err)
+	case errors.Is(err, vault.ErrVaultNotFound):
+		return fmt.Errorf("%w\nRun: `devctl vault init`", err)
+	case errors.Is(err, vault.ErrVaultExists):
+		return fmt.Errorf("vault already exists")
 	case errors.Is(err, vault.ErrKeyNotFound):
-		return fmt.Errorf("%w\nRun: devctl vault list (to see available keys)", err)
+		return fmt.Errorf("%w\nRun: `devctl vault list` (to see available keys)", err)
 	case errors.Is(err, vault.ErrInvalidKeyName):
 		return fmt.Errorf("invalid key — must be UPPER_SNAKE_CASE (e.g., MY_TOKEN)")
 	default:

@@ -12,6 +12,7 @@ import (
 
 func TestInit(t *testing.T) {
 	// #given: 一个空目录
+	t.Setenv(envSecretKey, "")
 	v := New(filepath.Join(t.TempDir(), "vault"))
 
 	// #when: 初始化 vault
@@ -23,16 +24,16 @@ func TestInit(t *testing.T) {
 	require.FileExists(t, v.vaultPath())
 }
 
-func TestInit_AlreadyInitialized(t *testing.T) {
-	// #given: 一个已初始化的 vault
+func TestInit_VaultExists(t *testing.T) {
+	// #given: a vault that already exists
 	v := New(filepath.Join(t.TempDir(), "vault"))
 	require.NoError(t, v.Init())
 
-	// #when: 再次初始化
+	// #when: init again
 	err := v.Init()
 
-	// #then: 返回 ErrAlreadyInitialized
-	require.ErrorIs(t, err, ErrAlreadyInitialized)
+	// #then: returns ErrVaultExists
+	require.ErrorIs(t, err, ErrVaultExists)
 }
 
 func TestSetGet(t *testing.T) {
@@ -207,18 +208,20 @@ func TestSetGet_WithEnvKey(t *testing.T) {
 	require.Equal(t, "secret123", got)
 }
 
-func TestIsInitialized_WithEnvKey(t *testing.T) {
-	// #given: DEVCTL_SECRET_KEY is set, vault.age exists, no identity file
+func TestInit_WithEnvKey_NoIdentityFile(t *testing.T) {
+	// #given: DEVCTL_SECRET_KEY is set
 	identity, err := age.GenerateX25519Identity()
 	require.NoError(t, err)
 	t.Setenv(envSecretKey, identity.String())
 
 	v := New(filepath.Join(t.TempDir(), "vault"))
+
+	// #when: init vault
 	require.NoError(t, v.Init())
 
-	// #then: IsInitialized returns true without identity file
-	require.True(t, v.IsInitialized())
+	// #then: vault.age exists but no identity file
 	require.NoFileExists(t, v.identityPath())
+	require.FileExists(t, v.vaultPath())
 }
 
 func TestEnvKey_OverridesFile(t *testing.T) {
@@ -239,42 +242,41 @@ func TestEnvKey_OverridesFile(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestOperations_NotInitialized(t *testing.T) {
-	// #given: 一个未初始化的 vault
+func TestOperations_IdentityNotFound(t *testing.T) {
+	// #given: no identity and no vault
+	t.Setenv(envSecretKey, "")
 	v := New(filepath.Join(t.TempDir(), "vault"))
 
-	// #when/#then: 所有操作返回 ErrNotInitialized
-	require.ErrorIs(t, v.Set("KEY", "val"), ErrNotInitialized)
+	// #when/#then: all operations return ErrIdentityNotFound
+	require.ErrorIs(t, v.Set("KEY", "val"), ErrIdentityNotFound)
 
 	_, err := v.Get(context.Background(), "KEY")
-	require.ErrorIs(t, err, ErrNotInitialized)
+	require.ErrorIs(t, err, ErrIdentityNotFound)
 
-	require.ErrorIs(t, v.Delete("KEY"), ErrNotInitialized)
+	require.ErrorIs(t, v.Delete("KEY"), ErrIdentityNotFound)
 
 	_, err = v.List()
-	require.ErrorIs(t, err, ErrNotInitialized)
+	require.ErrorIs(t, err, ErrIdentityNotFound)
 }
 
-func TestIsInitialized(t *testing.T) {
+func TestOperations_VaultNotFound(t *testing.T) {
+	// #given: identity file exists but no vault file
 	dir := filepath.Join(t.TempDir(), "vault")
-
-	// #given: 未初始化的目录
+	require.NoError(t, os.MkdirAll(dir, dirPerm))
 	v := New(dir)
 
-	// #then: 返回 false
-	require.False(t, v.IsInitialized())
+	identity, err := age.GenerateX25519Identity()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(v.identityPath(), []byte(identity.String()+"\n"), filePerm))
 
-	// #given: 只有 identity 文件
-	require.NoError(t, os.MkdirAll(dir, dirPerm))
-	require.NoError(t, os.WriteFile(v.identityPath(), []byte("x"), filePerm))
-	require.False(t, v.IsInitialized())
+	// #when/#then: all operations return ErrVaultNotFound
+	require.ErrorIs(t, v.Set("KEY", "val"), ErrVaultNotFound)
 
-	// #given: 只有 vault 文件
-	os.Remove(v.identityPath())
-	require.NoError(t, os.WriteFile(v.vaultPath(), []byte("x"), filePerm))
-	require.False(t, v.IsInitialized())
+	_, err = v.Get(context.Background(), "KEY")
+	require.ErrorIs(t, err, ErrVaultNotFound)
 
-	// #given: 两个文件都存在
-	require.NoError(t, os.WriteFile(v.identityPath(), []byte("x"), filePerm))
-	require.True(t, v.IsInitialized())
+	require.ErrorIs(t, v.Delete("KEY"), ErrVaultNotFound)
+
+	_, err = v.List()
+	require.ErrorIs(t, err, ErrVaultNotFound)
 }

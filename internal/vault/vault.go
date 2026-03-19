@@ -33,8 +33,8 @@ func New(dir string) *Vault {
 }
 
 func (v *Vault) Init() error {
-	if v.IsInitialized() {
-		return ErrAlreadyInitialized
+	if _, err := os.Stat(v.vaultPath()); err == nil {
+		return ErrVaultExists
 	}
 
 	if err := os.MkdirAll(v.dir, dirPerm); err != nil {
@@ -132,16 +132,6 @@ func (v *Vault) List() ([]string, error) {
 	}
 	sort.Strings(keys)
 	return keys, nil
-}
-
-func (v *Vault) IsInitialized() bool {
-	hasIdentity := os.Getenv(envSecretKey) != ""
-	if !hasIdentity {
-		_, err := os.Stat(v.identityPath())
-		hasIdentity = err == nil
-	}
-	_, err := os.Stat(v.vaultPath())
-	return hasIdentity && err == nil
 }
 
 // --- internal helpers ---
@@ -287,8 +277,17 @@ func atomicWrite(path string, data []byte) error {
 }
 
 func (v *Vault) requireInitialized() error {
-	if !v.IsInitialized() {
-		return ErrNotInitialized
+	hasIdentity := os.Getenv(envSecretKey) != ""
+	if !hasIdentity {
+		_, err := os.Stat(v.identityPath())
+		hasIdentity = err == nil
+	}
+	if !hasIdentity {
+		return ErrIdentityNotFound
+	}
+
+	if _, err := os.Stat(v.vaultPath()); err != nil {
+		return ErrVaultNotFound
 	}
 	return nil
 }
