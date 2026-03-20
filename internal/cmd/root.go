@@ -49,6 +49,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 
 	cmd.AddCommand(NewCmdVault(cfg))
 	cmd.AddCommand(NewCmdKit(cfg))
+	cmd.AddCommand(NewCmdSync(cfg))
 
 	return cmd, nil
 }
