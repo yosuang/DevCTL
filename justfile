@@ -18,7 +18,7 @@ clean: _build-script
     @./script/build{{exe}} clean
 
 lint:
-    golangci-lint.exe fmt && golangci-lint.exe run --fix
+    golangci-lint{{exe}} fmt && golangci-lint{{exe}} run --fix
 
 test:
     go test ./...
