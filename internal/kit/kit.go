@@ -15,9 +15,11 @@ import (
 const (
 	manifestFile     = "kit.json"
 	compileStateFile = ".compile-state.json"
-	configsDir       = "configs"
 	dirPerm          = 0755
 	filePerm         = 0644
+
+	// DefaultConfigMode is the default deployment mode for tracked configs.
+	DefaultConfigMode = "replace-if-exists"
 )
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$`)
@@ -35,8 +37,8 @@ type PackageEntry struct {
 }
 
 type ConfigEntry struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
+	TargetDir string `json:"targetDir"`
+	Mode      string `json:"mode,omitempty"`
 }
 
 type compileState map[string]compileRecord
@@ -62,8 +64,8 @@ func (k *Kit) ManifestPath() string {
 	return filepath.Join(k.dir, manifestFile)
 }
 
-func (k *Kit) ConfigsDir() string {
-	return filepath.Join(k.dir, configsDir)
+func (k *Kit) ConfigDir(name string) string {
+	return filepath.Join(k.dir, name)
 }
 
 func (k *Kit) compileStatePath() string {

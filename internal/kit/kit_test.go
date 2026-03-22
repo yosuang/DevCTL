@@ -256,7 +256,7 @@ func TestSaveAndLoad(t *testing.T) {
 	m := &Manifest{
 		Vars:     map[string]string{"KEY": "val"},
 		Packages: map[string][]PackageEntry{"base": {{Name: "git"}}},
-		Configs:  map[string]ConfigEntry{".gitconfig": {Source: "configs/.gitconfig", Target: "~/.gitconfig"}},
+		Configs:  map[string]ConfigEntry{"claude-code": {TargetDir: "~/.claude/", Mode: DefaultConfigMode}},
 	}
 
 	// #when: saving and loading

@@ -11,8 +11,10 @@ import (
 	"devctl/pkg/home"
 )
 
-// Track copies a file or directory into the kit configs and adds it to the manifest.
-func (k *Kit) Track(targetPath string) error {
+// Track copies a file or directory into kit/<name>/ and adds it to the manifest.
+// name is required and determines the subdirectory under kit/.
+// mode specifies the deployment mode; if empty, defaults to DefaultConfigMode.
+func (k *Kit) Track(targetPath, name, mode string) error {
 	slog.Debug("kit track: resolving path", "raw", targetPath)
 	targetPath = os.ExpandEnv(targetPath)
 	targetPath = home.Long(targetPath)
@@ -41,54 +43,39 @@ func (k *Kit) Track(targetPath string) error {
 		return err
 	}
 
-	// Check if already tracked (same target path)
-	for _, cfg := range m.Configs {
-		if home.Long(cfg.Target) == targetPath {
-			return ErrAlreadyTracked
-		}
+	// Copy into kit/<name>/
+	configDir := k.ConfigDir(name)
+	if err := os.MkdirAll(configDir, dirPerm); err != nil {
+		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	// Determine key and source path
-	basename := filepath.Base(targetPath)
-	key := basename
-	sourceName := basename
-
-	// Check for basename collision and disambiguate
-	if _, exists := m.Configs[key]; exists {
-		parentDir := filepath.Base(filepath.Dir(targetPath))
-		key = parentDir + "-" + basename
-		sourceName = key
-	}
-
-	sourcePath := filepath.Join(configsDir, sourceName)
-	fullSourcePath := filepath.Join(k.dir, sourcePath)
-
-	// Create configs directory
-	if err := os.MkdirAll(filepath.Join(k.dir, configsDir), dirPerm); err != nil {
-		return fmt.Errorf("creating configs directory: %w", err)
-	}
-
-	// Copy file or directory
+	var shortTargetDir string
 	if info.IsDir() {
-		if err := copyDir(targetPath, fullSourcePath); err != nil {
+		// Directory: copy contents into kit/<name>/
+		if err := copyDir(targetPath, configDir); err != nil {
 			return fmt.Errorf("copying directory: %w", err)
 		}
+		shortTargetDir = filepath.ToSlash(home.Short(targetPath))
 	} else {
-		if err := copyFile(targetPath, fullSourcePath); err != nil {
+		// Single file: copy into kit/<name>/<filename>
+		if err := copyFile(targetPath, filepath.Join(configDir, filepath.Base(targetPath))); err != nil {
 			return fmt.Errorf("copying file: %w", err)
 		}
+		shortTargetDir = filepath.ToSlash(home.Short(filepath.Dir(targetPath)))
 	}
 
 	// Add to manifest
-	shortTarget := home.Short(targetPath)
-	m.Configs[key] = ConfigEntry{
-		Source: sourcePath,
-		Target: shortTarget,
+	if mode == "" {
+		mode = DefaultConfigMode
+	}
+	m.Configs[name] = ConfigEntry{
+		TargetDir: shortTargetDir,
+		Mode:      mode,
 	}
 	return k.Save(m)
 }
 
-// Untrack removes a config from the manifest. Does not delete the source file.
+// Untrack removes a config from the manifest. Does not delete the source files.
 func (k *Kit) Untrack(name string) error {
 	m, err := k.Load()
 	if err != nil {

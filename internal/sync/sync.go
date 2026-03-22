@@ -15,9 +15,8 @@ const gitignoreContent = `*
 !vault/
 !vault/vault.age
 !kit/
-!kit/kit.json
-!kit/configs/
-!kit/configs/*
+!kit/**
+kit/.compile-state.json
 `
 
 type Repo struct {

@@ -14,7 +14,6 @@ import (
 	"devctl/internal/vault"
 	"devctl/pkg/cmdutil"
 	"devctl/pkg/executil"
-	"devctl/pkg/home"
 	"devctl/pkg/pkgmgr"
 	"devctl/pkg/pkgmgr/brew"
 	"devctl/pkg/pkgmgr/scoop"
@@ -176,7 +175,7 @@ func newCmdKitApply(kitDir, vaultDir string) *cobra.Command {
 				if len(configNames) > 0 {
 					fmt.Fprintln(os.Stderr, "Would compile:")
 					for _, name := range configNames {
-						fmt.Fprintf(os.Stderr, "  %s -> %s\n", name, m.Configs[name].Target)
+						fmt.Fprintf(os.Stderr, "  %s -> %s\n", name, m.Configs[name].TargetDir)
 					}
 				}
 				return nil
@@ -294,19 +293,30 @@ func newCmdKitRemove(kitDir string) *cobra.Command {
 }
 
 func newCmdKitTrack(kitDir string) *cobra.Command {
-	return &cobra.Command{
-		Use:   "track <file-or-dir-path>",
+	var name string
+	var mode string
+
+	cmd := &cobra.Command{
+		Use:   "track <file-or-dir> --name <name>",
 		Short: "Track a config file or directory",
 		Args:  cmdutil.ExactArgs(1, "file or directory path is required"),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if name == "" {
+				return fmt.Errorf("--name is required")
+			}
 			k := kit.New(kitDir)
-			if err := k.Track(args[0]); err != nil {
+			if err := k.Track(args[0], name, mode); err != nil {
 				return kitError(err)
 			}
-			fmt.Fprintf(os.Stderr, "Tracking %s\n", home.Short(args[0]))
+			fmt.Fprintf(os.Stderr, "Tracked %s → kit/%s/\n", filepath.Base(args[0]), name)
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&name, "name", "", "name for the tracked config (required)")
+	cmd.Flags().StringVar(&mode, "mode", "", "deployment mode (default: replace-if-exists)")
+
+	return cmd
 }
 
 func newCmdKitUntrack(kitDir string) *cobra.Command {
@@ -441,7 +451,7 @@ func newCmdKitList(kitDir string) *cobra.Command {
 					fmt.Fprintln(os.Stderr, "Configs:")
 					for _, name := range configNames {
 						cfg := m.Configs[name]
-						fmt.Fprintf(os.Stderr, "  %s: %s -> %s\n", name, cfg.Source, cfg.Target)
+						fmt.Fprintf(os.Stderr, "  %s -> %s\n", name, cfg.TargetDir)
 					}
 				}
 			}
@@ -470,8 +480,6 @@ func kitError(err error) error {
 	switch {
 	case errors.Is(err, kit.ErrManifestNotFound):
 		return fmt.Errorf("kit not initialized\nRun: `devctl kit set <KEY> <VALUE>` or `devctl kit add <package>` to get started")
-	case errors.Is(err, kit.ErrAlreadyTracked):
-		return fmt.Errorf("config already tracked")
 	case errors.Is(err, kit.ErrNotTracked):
 		return fmt.Errorf("config not tracked\nRun: `devctl kit list --configs` (to see tracked configs)")
 	case errors.Is(err, kit.ErrInvalidKeyName):
