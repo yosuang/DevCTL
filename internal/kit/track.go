@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"devctl/pkg/home"
 )
@@ -15,6 +16,10 @@ import (
 // name is required and determines the subdirectory under kit/.
 // mode specifies the deployment mode; if empty, defaults to DefaultConfigMode.
 func (k *Kit) Track(targetPath, name, mode string) error {
+	if name == "" || strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return fmt.Errorf("%w: %q", ErrInvalidConfigName, name)
+	}
+
 	slog.Debug("kit track: resolving path", "raw", targetPath)
 	targetPath = os.ExpandEnv(targetPath)
 	targetPath = home.Long(targetPath)
@@ -43,8 +48,10 @@ func (k *Kit) Track(targetPath, name, mode string) error {
 		return err
 	}
 
-	// Copy into kit/<name>/
 	configDir := k.ConfigDir(name)
+	if err := os.RemoveAll(configDir); err != nil {
+		return fmt.Errorf("cleaning config directory: %w", err)
+	}
 	if err := os.MkdirAll(configDir, dirPerm); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}

@@ -301,9 +301,6 @@ func newCmdKitTrack(kitDir string) *cobra.Command {
 		Short: "Track a config file or directory",
 		Args:  cmdutil.ExactArgs(1, "file or directory path is required"),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if name == "" {
-				return fmt.Errorf("--name is required")
-			}
 			k := kit.New(kitDir)
 			if err := k.Track(args[0], name, mode); err != nil {
 				return kitError(err)
@@ -314,6 +311,7 @@ func newCmdKitTrack(kitDir string) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "name for the tracked config (required)")
+	_ = cmd.MarkFlagRequired("name")
 	cmd.Flags().StringVar(&mode, "mode", "", "deployment mode (default: replace-if-exists)")
 
 	return cmd

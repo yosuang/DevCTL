@@ -31,13 +31,18 @@ linters:
     - usetesting
 
   exclusions:
-
     generated: lax
 
     warn-unused: true
 
     rules:
       - path: pkg/version/
+        linters:
+          - revive
+      - path: internal/build/
+        linters:
+          - revive
+      - path: internal/sync/
         linters:
           - revive
 

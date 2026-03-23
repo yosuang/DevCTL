@@ -89,6 +89,32 @@ func TestTrack_OverwriteExisting(t *testing.T) {
 	require.Equal(t, "new", string(copied))
 }
 
+func TestTrack_OverwriteDirectory_RemovesStaleFiles(t *testing.T) {
+	// #given: a directory tracked with two files
+	dir := t.TempDir()
+	kitDir := filepath.Join(dir, "kit")
+	targetDir := filepath.Join(dir, "source", "myconfig")
+	require.NoError(t, os.MkdirAll(targetDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "a.conf"), []byte("a"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "b.conf"), []byte("b"), 0644))
+
+	k := New(kitDir)
+	require.NoError(t, k.Track(targetDir, "myconfig", ""))
+
+	// Verify both files exist
+	require.FileExists(t, filepath.Join(kitDir, "myconfig", "a.conf"))
+	require.FileExists(t, filepath.Join(kitDir, "myconfig", "b.conf"))
+
+	// #when: re-tracking with only one file (b.conf removed from source)
+	require.NoError(t, os.Remove(filepath.Join(targetDir, "b.conf")))
+	err := k.Track(targetDir, "myconfig", "")
+
+	// #then: stale file b.conf is removed from kit/<name>/
+	require.NoError(t, err)
+	require.FileExists(t, filepath.Join(kitDir, "myconfig", "a.conf"))
+	require.NoFileExists(t, filepath.Join(kitDir, "myconfig", "b.conf"))
+}
+
 func TestTrack_ExpandsEnvVar(t *testing.T) {
 	// #given: a file referenced via an environment variable in the path
 	dir := t.TempDir()
