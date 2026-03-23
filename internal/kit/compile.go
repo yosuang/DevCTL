@@ -139,20 +139,10 @@ func (k *Kit) CompileAll(ctx context.Context, getSecret SecretGetter) (successes
 }
 
 func (k *Kit) compileEntry(ctx context.Context, name string, cfg ConfigEntry, vars map[string]string, getSecret SecretGetter, state compileState) error {
-	sourcePath := filepath.Join(k.dir, cfg.Source)
-	targetPath := home.Long(cfg.Target)
+	sourcePath := filepath.Join(k.dir, name)
+	targetPath := filepath.FromSlash(home.Long(cfg.TargetDir))
 
-	info, err := os.Stat(sourcePath)
-	if err != nil {
-		return fmt.Errorf("reading source %s: %w", cfg.Source, err)
-	}
-
-	var allContent []byte
-	if info.IsDir() {
-		allContent, err = k.compileDirFiles(ctx, sourcePath, targetPath, vars, getSecret)
-	} else {
-		allContent, err = k.compileSingleFile(ctx, sourcePath, targetPath, vars, getSecret)
-	}
+	allContent, err := k.compileDirFiles(ctx, sourcePath, targetPath, vars, getSecret)
 	if err != nil {
 		return err
 	}
@@ -221,10 +211,9 @@ const (
 
 // ConfigStatus represents the compilation status of a tracked config.
 type ConfigStatus struct {
-	Name   string
-	Source string
-	Target string
-	State  ConfigState
+	Name      string
+	TargetDir string
+	State     ConfigState
 }
 
 // ConfigStatuses returns the compilation status of all tracked configs.
@@ -242,9 +231,8 @@ func (k *Kit) ConfigStatuses() ([]ConfigStatus, error) {
 	var statuses []ConfigStatus
 	for name, cfg := range m.Configs {
 		s := ConfigStatus{
-			Name:   name,
-			Source: cfg.Source,
-			Target: cfg.Target,
+			Name:      name,
+			TargetDir: cfg.TargetDir,
 		}
 
 		record, ok := state[name]
@@ -255,7 +243,7 @@ func (k *Kit) ConfigStatuses() ([]ConfigStatus, error) {
 			if err != nil {
 				s.State = ConfigStateUncompiled
 			} else {
-				sourcePath := filepath.Join(k.dir, cfg.Source)
+				sourcePath := filepath.Join(k.dir, name)
 				if isOutdated(sourcePath, compiledAt) {
 					s.State = ConfigStateOutdated
 				} else {

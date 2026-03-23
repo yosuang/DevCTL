@@ -154,7 +154,7 @@ func TestCompileTemplate_EmptyTemplate(t *testing.T) {
 }
 
 func TestCompile_SingleFile(t *testing.T) {
-	// #given: a kit with a tracked config template
+	// #given: a kit with a tracked config (single file stored in kit/<name>/)
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
 	targetDir := filepath.Join(dir, "target")
@@ -163,8 +163,8 @@ func TestCompile_SingleFile(t *testing.T) {
 	k := New(kitDir)
 	require.NoError(t, k.SetVar("NAME", "Yu"))
 
-	// Create template source
-	sourceDir := filepath.Join(kitDir, "configs")
+	// Create template source in kit/gitconfig/
+	sourceDir := filepath.Join(kitDir, "gitconfig")
 	require.NoError(t, os.MkdirAll(sourceDir, 0755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(sourceDir, ".gitconfig"),
@@ -174,27 +174,26 @@ func TestCompile_SingleFile(t *testing.T) {
 
 	// Register config in manifest
 	m, _ := k.Load()
-	targetFile := filepath.Join(targetDir, ".gitconfig")
-	m.Configs[".gitconfig"] = ConfigEntry{
-		Source: "configs/.gitconfig",
-		Target: targetFile,
+	m.Configs["gitconfig"] = ConfigEntry{
+		TargetDir: targetDir,
+		Mode:      "replace-if-exists",
 	}
 	require.NoError(t, k.Save(m))
 
 	// #when: compiling the config
-	err := k.Compile(context.Background(), ".gitconfig", nil)
+	err := k.Compile(context.Background(), "gitconfig", nil)
 
 	// #then: target file is written with resolved values
 	require.NoError(t, err)
-	content, err := os.ReadFile(targetFile)
+	content, err := os.ReadFile(filepath.Join(targetDir, ".gitconfig"))
 	require.NoError(t, err)
 	require.Equal(t, "[user]\n    name = Yu", string(content))
 
 	// #then: compile state is updated
 	state, err := k.loadCompileState()
 	require.NoError(t, err)
-	require.Contains(t, state, ".gitconfig")
-	require.Contains(t, state[".gitconfig"].Hash, "sha256:")
+	require.Contains(t, state, "gitconfig")
+	require.Contains(t, state["gitconfig"].Hash, "sha256:")
 }
 
 func TestCompile_Directory(t *testing.T) {
@@ -206,8 +205,8 @@ func TestCompile_Directory(t *testing.T) {
 	k := New(kitDir)
 	require.NoError(t, k.SetVar("THEME", "dark"))
 
-	// Create template directory
-	sourceDir := filepath.Join(kitDir, "configs", "nvim")
+	// Create template directory in kit/nvim/
+	sourceDir := filepath.Join(kitDir, "nvim")
 	require.NoError(t, os.MkdirAll(filepath.Join(sourceDir, "lua"), 0755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(sourceDir, "init.lua"),
@@ -223,8 +222,8 @@ func TestCompile_Directory(t *testing.T) {
 	// Register config
 	m, _ := k.loadOrInit()
 	m.Configs["nvim"] = ConfigEntry{
-		Source: "configs/nvim",
-		Target: targetDir,
+		TargetDir: targetDir,
+		Mode:      "replace-if-exists",
 	}
 	require.NoError(t, k.Save(m))
 
@@ -265,25 +264,26 @@ func TestCompileAll(t *testing.T) {
 	k := New(kitDir)
 	require.NoError(t, k.SetVar("NAME", "Yu"))
 
-	sourceDir := filepath.Join(kitDir, "configs")
-	require.NoError(t, os.MkdirAll(sourceDir, 0755))
-
-	// Good template
+	// Good template in kit/good/
+	goodDir := filepath.Join(kitDir, "good")
+	require.NoError(t, os.MkdirAll(goodDir, 0755))
 	require.NoError(t, os.WriteFile(
-		filepath.Join(sourceDir, "good.conf"),
+		filepath.Join(goodDir, "good.conf"),
 		[]byte("name={{var.NAME}}"),
 		0644,
 	))
-	// Bad template (missing variable)
+	// Bad template in kit/bad/
+	badDir := filepath.Join(kitDir, "bad")
+	require.NoError(t, os.MkdirAll(badDir, 0755))
 	require.NoError(t, os.WriteFile(
-		filepath.Join(sourceDir, "bad.conf"),
+		filepath.Join(badDir, "bad.conf"),
 		[]byte("val={{var.MISSING}}"),
 		0644,
 	))
 
 	m, _ := k.Load()
-	m.Configs["good"] = ConfigEntry{Source: "configs/good.conf", Target: filepath.Join(targetDir, "good.conf")}
-	m.Configs["bad"] = ConfigEntry{Source: "configs/bad.conf", Target: filepath.Join(targetDir, "bad.conf")}
+	m.Configs["good"] = ConfigEntry{TargetDir: filepath.Join(targetDir, "good"), Mode: DefaultConfigMode}
+	m.Configs["bad"] = ConfigEntry{TargetDir: filepath.Join(targetDir, "bad"), Mode: DefaultConfigMode}
 	require.NoError(t, k.Save(m))
 
 	// #when: compiling all
@@ -295,7 +295,7 @@ func TestCompileAll(t *testing.T) {
 }
 
 func TestConfigStatuses(t *testing.T) {
-	// #given: a kit with compiled, outdated, and uncompiled configs
+	// #given: a kit with compiled and uncompiled configs
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
 	targetDir := filepath.Join(dir, "target")
@@ -304,17 +304,19 @@ func TestConfigStatuses(t *testing.T) {
 	k := New(kitDir)
 	require.NoError(t, k.SetVar("V", "1"))
 
-	sourceDir := filepath.Join(kitDir, "configs")
-	require.NoError(t, os.MkdirAll(sourceDir, 0755))
+	// Compiled config in kit/compiled/
+	compiledDir := filepath.Join(kitDir, "compiled")
+	require.NoError(t, os.MkdirAll(compiledDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(compiledDir, "compiled.conf"), []byte("v={{var.V}}"), 0644))
 
-	// Compiled config
-	require.NoError(t, os.WriteFile(filepath.Join(sourceDir, "compiled.conf"), []byte("v={{var.V}}"), 0644))
-	// Uncompiled config
-	require.NoError(t, os.WriteFile(filepath.Join(sourceDir, "uncompiled.conf"), []byte("x=1"), 0644))
+	// Uncompiled config in kit/uncompiled/
+	uncompiledDir := filepath.Join(kitDir, "uncompiled")
+	require.NoError(t, os.MkdirAll(uncompiledDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(uncompiledDir, "uncompiled.conf"), []byte("x=1"), 0644))
 
 	m, _ := k.Load()
-	m.Configs["compiled"] = ConfigEntry{Source: "configs/compiled.conf", Target: filepath.Join(targetDir, "compiled.conf")}
-	m.Configs["uncompiled"] = ConfigEntry{Source: "configs/uncompiled.conf", Target: filepath.Join(targetDir, "uncompiled.conf")}
+	m.Configs["compiled"] = ConfigEntry{TargetDir: filepath.Join(targetDir, "compiled"), Mode: DefaultConfigMode}
+	m.Configs["uncompiled"] = ConfigEntry{TargetDir: filepath.Join(targetDir, "uncompiled"), Mode: DefaultConfigMode}
 	require.NoError(t, k.Save(m))
 
 	// Compile the first one

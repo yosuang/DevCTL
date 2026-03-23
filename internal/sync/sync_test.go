@@ -204,9 +204,7 @@ func TestGitignoreContent(t *testing.T) {
 	require.Contains(t, text, "!vault/")
 	require.Contains(t, text, "!vault/vault.age")
 	require.Contains(t, text, "!kit/")
-	require.Contains(t, text, "!kit/kit.json")
-	require.Contains(t, text, "!kit/configs/")
-	require.Contains(t, text, "!kit/configs/*")
+	require.Contains(t, text, "!kit/**")
 }
 
 func TestCommitMessageFormat(t *testing.T) {
@@ -291,6 +289,8 @@ func TestExcludedFilesNotTracked(t *testing.T) {
 
 	// Create files that should be tracked
 	require.NoError(t, os.WriteFile(filepath.Join(configDir, "kit", "kit.json"), []byte(`{}`), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(configDir, "kit", "claude-code"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "kit", "claude-code", "settings.json"), []byte(`{}`), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(configDir, "vault", "vault.age"), []byte("encrypted"), 0644))
 
 	// #when: sync
@@ -301,13 +301,20 @@ func TestExcludedFilesNotTracked(t *testing.T) {
 	out, err := r.run("ls-files")
 	require.NoError(t, err)
 
-	tracked := strings.TrimSpace(out)
-	require.NotContains(t, tracked, "logs/")
-	require.NotContains(t, tracked, ".compile-state.json")
-	require.NotContains(t, tracked, "settings.json")
-	require.NotContains(t, tracked, "vault/identity")
+	trackedFiles := strings.Split(strings.TrimSpace(out), "\n")
+	trackedSet := make(map[string]bool, len(trackedFiles))
+	for _, f := range trackedFiles {
+		trackedSet[strings.TrimSpace(f)] = true
+	}
+
+	// Excluded files are not present
+	require.False(t, trackedSet["logs/app.log"], "logs/app.log should be excluded")
+	require.False(t, trackedSet["kit/.compile-state.json"], "kit/.compile-state.json should be excluded")
+	require.False(t, trackedSet["settings.json"], "settings.json should be excluded")
+	require.False(t, trackedSet["vault/identity"], "vault/identity should be excluded")
 
 	// Tracked files are present
-	require.Contains(t, tracked, "kit/kit.json")
-	require.Contains(t, tracked, "vault/vault.age")
+	require.True(t, trackedSet["kit/kit.json"], "kit/kit.json should be tracked")
+	require.True(t, trackedSet["kit/claude-code/settings.json"], "kit/claude-code/settings.json should be tracked")
+	require.True(t, trackedSet["vault/vault.age"], "vault/vault.age should be tracked")
 }

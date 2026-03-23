@@ -12,109 +12,107 @@ func TestTrack_SingleFile(t *testing.T) {
 	// #given: an existing file to track
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
-	targetFile := filepath.Join(dir, "source", ".gitconfig")
+	targetFile := filepath.Join(dir, "source", ".claude", "settings.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(targetFile), 0755))
-	require.NoError(t, os.WriteFile(targetFile, []byte("[user]\n    name = Yu"), 0644))
+	require.NoError(t, os.WriteFile(targetFile, []byte(`{"key":"val"}`), 0644))
 
 	k := New(kitDir)
 
-	// #when: tracking the file
-	err := k.Track(targetFile)
+	// #when: tracking the file with a name
+	err := k.Track(targetFile, "claude-code", "")
 
-	// #then: file is copied to configs and manifest is updated
+	// #then: file is copied to kit/<name>/ and manifest is updated
 	require.NoError(t, err)
 
 	m, err := k.Load()
 	require.NoError(t, err)
-	require.Contains(t, m.Configs, ".gitconfig")
-	require.Equal(t, filepath.Join("configs", ".gitconfig"), m.Configs[".gitconfig"].Source)
+	require.Contains(t, m.Configs, "claude-code")
+	require.Equal(t, DefaultConfigMode, m.Configs["claude-code"].Mode)
 
-	// Verify the source file was copied
-	copied, err := os.ReadFile(filepath.Join(kitDir, "configs", ".gitconfig"))
+	// Verify the source file was copied into kit/claude-code/
+	copied, err := os.ReadFile(filepath.Join(kitDir, "claude-code", "settings.json"))
 	require.NoError(t, err)
-	require.Equal(t, "[user]\n    name = Yu", string(copied))
+	require.Equal(t, `{"key":"val"}`, string(copied))
 }
 
 func TestTrack_Directory(t *testing.T) {
 	// #given: an existing directory to track
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
-	targetDir := filepath.Join(dir, "source", "nvim")
-	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "lua"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "init.lua"), []byte("-- init"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "lua", "plugins.lua"), []byte("-- plugins"), 0644))
+	targetDir := filepath.Join(dir, "source", "opencode")
+	require.NoError(t, os.MkdirAll(targetDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "opencode.jsonc"), []byte("// config"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "tui.json"), []byte(`{"theme":"dark"}`), 0644))
 
 	k := New(kitDir)
 
-	// #when: tracking the directory
-	err := k.Track(targetDir)
+	// #when: tracking the directory with a name
+	err := k.Track(targetDir, "opencode", "")
 
-	// #then: directory is copied recursively and manifest is updated
+	// #then: directory contents are copied to kit/<name>/ and manifest is updated
 	require.NoError(t, err)
 
 	m, err := k.Load()
 	require.NoError(t, err)
-	require.Contains(t, m.Configs, "nvim")
-	require.Equal(t, filepath.Join("configs", "nvim"), m.Configs["nvim"].Source)
+	require.Contains(t, m.Configs, "opencode")
+	require.Equal(t, DefaultConfigMode, m.Configs["opencode"].Mode)
 
 	// Verify files were copied
-	content, err := os.ReadFile(filepath.Join(kitDir, "configs", "nvim", "init.lua"))
+	content, err := os.ReadFile(filepath.Join(kitDir, "opencode", "opencode.jsonc"))
 	require.NoError(t, err)
-	require.Equal(t, "-- init", string(content))
+	require.Equal(t, "// config", string(content))
 
-	content, err = os.ReadFile(filepath.Join(kitDir, "configs", "nvim", "lua", "plugins.lua"))
+	content, err = os.ReadFile(filepath.Join(kitDir, "opencode", "tui.json"))
 	require.NoError(t, err)
-	require.Equal(t, "-- plugins", string(content))
+	require.Equal(t, `{"theme":"dark"}`, string(content))
 }
 
-func TestTrack_AlreadyTracked(t *testing.T) {
+func TestTrack_OverwriteExisting(t *testing.T) {
 	// #given: a file that is already tracked
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
-	targetFile := filepath.Join(dir, "source", ".gitconfig")
+	targetFile := filepath.Join(dir, "source", ".claude", "settings.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(targetFile), 0755))
-	require.NoError(t, os.WriteFile(targetFile, []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(targetFile, []byte("old"), 0644))
 
 	k := New(kitDir)
-	require.NoError(t, k.Track(targetFile))
+	require.NoError(t, k.Track(targetFile, "claude-code", ""))
 
-	// #when: tracking the same file again
-	err := k.Track(targetFile)
+	// #when: updating the file and tracking again with the same name
+	require.NoError(t, os.WriteFile(targetFile, []byte("new"), 0644))
+	err := k.Track(targetFile, "claude-code", "")
 
-	// #then: returns ErrAlreadyTracked
-	require.ErrorIs(t, err, ErrAlreadyTracked)
+	// #then: succeeds and file is updated
+	require.NoError(t, err)
+	copied, err := os.ReadFile(filepath.Join(kitDir, "claude-code", "settings.json"))
+	require.NoError(t, err)
+	require.Equal(t, "new", string(copied))
 }
 
-func TestTrack_BasenamCollision(t *testing.T) {
-	// #given: a file with a basename that already exists as a tracked key
+func TestTrack_OverwriteDirectory_RemovesStaleFiles(t *testing.T) {
+	// #given: a directory tracked with two files
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
-
-	// Track first .gitconfig
-	firstDir := filepath.Join(dir, "first")
-	require.NoError(t, os.MkdirAll(firstDir, 0755))
-	firstFile := filepath.Join(firstDir, ".gitconfig")
-	require.NoError(t, os.WriteFile(firstFile, []byte("first"), 0644))
+	targetDir := filepath.Join(dir, "source", "myconfig")
+	require.NoError(t, os.MkdirAll(targetDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "a.conf"), []byte("a"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "b.conf"), []byte("b"), 0644))
 
 	k := New(kitDir)
-	require.NoError(t, k.Track(firstFile))
+	require.NoError(t, k.Track(targetDir, "myconfig", ""))
 
-	// Track second .gitconfig from a different directory
-	secondDir := filepath.Join(dir, "second")
-	require.NoError(t, os.MkdirAll(secondDir, 0755))
-	secondFile := filepath.Join(secondDir, ".gitconfig")
-	require.NoError(t, os.WriteFile(secondFile, []byte("second"), 0644))
+	// Verify both files exist
+	require.FileExists(t, filepath.Join(kitDir, "myconfig", "a.conf"))
+	require.FileExists(t, filepath.Join(kitDir, "myconfig", "b.conf"))
 
-	// #when: tracking the second file with the same basename
-	err := k.Track(secondFile)
+	// #when: re-tracking with only one file (b.conf removed from source)
+	require.NoError(t, os.Remove(filepath.Join(targetDir, "b.conf")))
+	err := k.Track(targetDir, "myconfig", "")
 
-	// #then: the key is disambiguated using parent directory
+	// #then: stale file b.conf is removed from kit/<name>/
 	require.NoError(t, err)
-
-	m, err := k.Load()
-	require.NoError(t, err)
-	require.Contains(t, m.Configs, ".gitconfig")
-	require.Contains(t, m.Configs, "second-.gitconfig")
+	require.FileExists(t, filepath.Join(kitDir, "myconfig", "a.conf"))
+	require.NoFileExists(t, filepath.Join(kitDir, "myconfig", "b.conf"))
 }
 
 func TestTrack_ExpandsEnvVar(t *testing.T) {
@@ -130,17 +128,17 @@ func TestTrack_ExpandsEnvVar(t *testing.T) {
 
 	k := New(kitDir)
 
-	// #when: tracking using $ENV_VAR in the path (simulating unexpanded shell variable)
-	err := k.Track("$TEST_DEVCTL_HOME/.claude/settings.json")
+	// #when: tracking using $ENV_VAR in the path
+	err := k.Track("$TEST_DEVCTL_HOME/.claude/settings.json", "claude-code", "")
 
 	// #then: the env var is expanded and file is tracked successfully
 	require.NoError(t, err)
 
 	m, err := k.Load()
 	require.NoError(t, err)
-	require.Contains(t, m.Configs, "settings.json")
+	require.Contains(t, m.Configs, "claude-code")
 
-	copied, err := os.ReadFile(filepath.Join(kitDir, "configs", "settings.json"))
+	copied, err := os.ReadFile(filepath.Join(kitDir, "claude-code", "settings.json"))
 	require.NoError(t, err)
 	require.Equal(t, `{"key":"val"}`, string(copied))
 }
@@ -149,24 +147,24 @@ func TestUntrack(t *testing.T) {
 	// #given: a tracked config
 	dir := t.TempDir()
 	kitDir := filepath.Join(dir, "kit")
-	targetFile := filepath.Join(dir, "source", ".gitconfig")
+	targetFile := filepath.Join(dir, "source", ".claude", "settings.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(targetFile), 0755))
 	require.NoError(t, os.WriteFile(targetFile, []byte("content"), 0644))
 
 	k := New(kitDir)
-	require.NoError(t, k.Track(targetFile))
+	require.NoError(t, k.Track(targetFile, "claude-code", ""))
 
 	// #when: untracking the config
-	err := k.Untrack(".gitconfig")
+	err := k.Untrack("claude-code")
 
 	// #then: config is removed from manifest
 	require.NoError(t, err)
 	m, err := k.Load()
 	require.NoError(t, err)
-	require.NotContains(t, m.Configs, ".gitconfig")
+	require.NotContains(t, m.Configs, "claude-code")
 
-	// #then: source file is NOT deleted
-	require.FileExists(t, filepath.Join(kitDir, "configs", ".gitconfig"))
+	// #then: source files are NOT deleted
+	require.FileExists(t, filepath.Join(kitDir, "claude-code", "settings.json"))
 }
 
 func TestUntrack_NotTracked(t *testing.T) {
