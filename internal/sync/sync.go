@@ -40,7 +40,10 @@ func (r *Repo) Sync(remoteURL, commitMsg string) error {
 	if err := r.fetchAndMerge(); err != nil {
 		return err
 	}
-	return r.commitAndPush(commitMsg)
+	if err := r.commitAndPush(commitMsg); err != nil {
+		return err
+	}
+	return r.writeState(&SyncState{LastSyncedAt: time.Now()})
 }
 
 // IsInitialized reports whether configDir is a git repo with a remote configured.
