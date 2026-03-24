@@ -32,7 +32,7 @@ func NewCmdVault(cfg *config.Config) *cobra.Command {
 	cmd.AddCommand(newCmdVaultInit(vaultDir))
 	cmd.AddCommand(newCmdVaultSet(vaultDir))
 	cmd.AddCommand(newCmdVaultGet(vaultDir))
-	cmd.AddCommand(newCmdVaultDelete(vaultDir))
+	cmd.AddCommand(newCmdVaultUnset(vaultDir))
 	cmd.AddCommand(newCmdVaultList(vaultDir))
 
 	return cmd
@@ -106,14 +106,14 @@ func newCmdVaultGet(vaultDir string) *cobra.Command {
 	}
 }
 
-func newCmdVaultDelete(vaultDir string) *cobra.Command {
+func newCmdVaultUnset(vaultDir string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "delete <KEY>",
-		Short: "Delete a secret",
+		Use:   "unset <KEY>",
+		Short: "Unset a secret",
 		Args:  cmdutil.ExactArgs(1, "KEY is required"),
 		RunE: func(_ *cobra.Command, args []string) error {
 			v := vault.New(vaultDir)
-			if err := v.Delete(args[0]); err != nil {
+			if err := v.Unset(args[0]); err != nil {
 				return vaultError(err)
 			}
 			return nil

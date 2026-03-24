@@ -79,14 +79,14 @@ func TestSet_EmptyValue(t *testing.T) {
 	require.Equal(t, "", got)
 }
 
-func TestDelete(t *testing.T) {
+func TestUnset(t *testing.T) {
 	// #given: 一个包含 key 的 vault
 	v := New(filepath.Join(t.TempDir(), "vault"))
 	require.NoError(t, v.Init())
 	require.NoError(t, v.Set("MY_TOKEN", "secret"))
 
 	// #when: 删除该 key
-	err := v.Delete("MY_TOKEN")
+	err := v.Unset("MY_TOKEN")
 
 	// #then: 删除成功，再次获取返回 ErrKeyNotFound
 	require.NoError(t, err)
@@ -94,13 +94,13 @@ func TestDelete(t *testing.T) {
 	require.ErrorIs(t, err, ErrKeyNotFound)
 }
 
-func TestDelete_NotFound(t *testing.T) {
+func TestUnset_NotFound(t *testing.T) {
 	// #given: 一个空的 vault
 	v := New(filepath.Join(t.TempDir(), "vault"))
 	require.NoError(t, v.Init())
 
 	// #when: 删除不存在的 key
-	err := v.Delete("MISSING_KEY")
+	err := v.Unset("MISSING_KEY")
 
 	// #then: 返回 ErrKeyNotFound
 	require.ErrorIs(t, err, ErrKeyNotFound)
@@ -253,7 +253,7 @@ func TestOperations_IdentityNotFound(t *testing.T) {
 	_, err := v.Get(context.Background(), "KEY")
 	require.ErrorIs(t, err, ErrIdentityNotFound)
 
-	require.ErrorIs(t, v.Delete("KEY"), ErrIdentityNotFound)
+	require.ErrorIs(t, v.Unset("KEY"), ErrIdentityNotFound)
 
 	_, err = v.List()
 	require.ErrorIs(t, err, ErrIdentityNotFound)
@@ -275,7 +275,7 @@ func TestOperations_VaultNotFound(t *testing.T) {
 	_, err = v.Get(context.Background(), "KEY")
 	require.ErrorIs(t, err, ErrVaultNotFound)
 
-	require.ErrorIs(t, v.Delete("KEY"), ErrVaultNotFound)
+	require.ErrorIs(t, v.Unset("KEY"), ErrVaultNotFound)
 
 	_, err = v.List()
 	require.ErrorIs(t, err, ErrVaultNotFound)

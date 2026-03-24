@@ -95,7 +95,7 @@ func (v *Vault) Get(_ context.Context, key string) (string, error) {
 	return val, nil
 }
 
-func (v *Vault) Delete(key string) error {
+func (v *Vault) Unset(key string) error {
 	if err := validateKey(key); err != nil {
 		return err
 	}
