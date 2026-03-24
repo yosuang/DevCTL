@@ -11,4 +11,5 @@ var (
 	ErrPackageExists      = errors.New("package already exists in group")
 	ErrInvalidPlaceholder = errors.New("invalid placeholder syntax")
 	ErrMissingVariables   = errors.New("missing variables")
+	ErrTargetDirConflict  = errors.New("target directory conflicts with existing config")
 )

@@ -49,31 +49,45 @@ func (k *Kit) Track(targetPath, name, mode string) error {
 	}
 
 	configDir := k.ConfigDir(name)
-	if err := os.RemoveAll(configDir); err != nil {
-		return fmt.Errorf("cleaning config directory: %w", err)
-	}
-	if err := os.MkdirAll(configDir, dirPerm); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
 
 	var shortTargetDir string
 	if info.IsDir() {
-		// Directory: copy contents into kit/<name>/
+		// Directory: replace entire config directory (clean stale files)
+		if err := os.RemoveAll(configDir); err != nil {
+			return fmt.Errorf("cleaning config directory: %w", err)
+		}
+		if err := os.MkdirAll(configDir, dirPerm); err != nil {
+			return fmt.Errorf("creating config directory: %w", err)
+		}
 		if err := copyDir(targetPath, configDir); err != nil {
 			return fmt.Errorf("copying directory: %w", err)
 		}
 		shortTargetDir = filepath.ToSlash(home.Short(targetPath))
 	} else {
-		// Single file: copy into kit/<name>/<filename>
+		// Single file: append to existing config directory
+		shortTargetDir = filepath.ToSlash(home.Short(filepath.Dir(targetPath)))
+
+		// Check targetDir consistency if config already exists
+		if existing, ok := m.Configs[name]; ok && existing.TargetDir != shortTargetDir {
+			return fmt.Errorf("%w: %q has target %q, but new file is from %q",
+				ErrTargetDirConflict, name, existing.TargetDir, shortTargetDir)
+		}
+
+		if err := os.MkdirAll(configDir, dirPerm); err != nil {
+			return fmt.Errorf("creating config directory: %w", err)
+		}
 		if err := copyFile(targetPath, filepath.Join(configDir, filepath.Base(targetPath))); err != nil {
 			return fmt.Errorf("copying file: %w", err)
 		}
-		shortTargetDir = filepath.ToSlash(home.Short(filepath.Dir(targetPath)))
 	}
 
 	// Add to manifest
 	if mode == "" {
-		mode = DefaultConfigMode
+		if existing, ok := m.Configs[name]; ok {
+			mode = existing.Mode
+		} else {
+			mode = DefaultConfigMode
+		}
 	}
 	m.Configs[name] = ConfigEntry{
 		TargetDir: shortTargetDir,

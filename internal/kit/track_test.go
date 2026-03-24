@@ -143,6 +143,77 @@ func TestTrack_ExpandsEnvVar(t *testing.T) {
 	require.Equal(t, `{"key":"val"}`, string(copied))
 }
 
+func TestTrack_MultipleFilesToSameConfig(t *testing.T) {
+	// #given: two files in the same directory
+	dir := t.TempDir()
+	kitDir := filepath.Join(dir, "kit")
+	sourceDir := filepath.Join(dir, "source", ".config", "myapp")
+	require.NoError(t, os.MkdirAll(sourceDir, 0755))
+	fileA := filepath.Join(sourceDir, "a.conf")
+	fileB := filepath.Join(sourceDir, "b.conf")
+	require.NoError(t, os.WriteFile(fileA, []byte("aaa"), 0644))
+	require.NoError(t, os.WriteFile(fileB, []byte("bbb"), 0644))
+
+	k := New(kitDir)
+
+	// #when: tracking two files separately with the same config name
+	require.NoError(t, k.Track(fileA, "myapp", ""))
+	require.NoError(t, k.Track(fileB, "myapp", ""))
+
+	// #then: both files exist in kit/<name>/
+	contentA, err := os.ReadFile(filepath.Join(kitDir, "myapp", "a.conf"))
+	require.NoError(t, err)
+	require.Equal(t, "aaa", string(contentA))
+
+	contentB, err := os.ReadFile(filepath.Join(kitDir, "myapp", "b.conf"))
+	require.NoError(t, err)
+	require.Equal(t, "bbb", string(contentB))
+}
+
+func TestTrack_FileOverwritesExistingFileInConfig(t *testing.T) {
+	// #given: a file already tracked in a config
+	dir := t.TempDir()
+	kitDir := filepath.Join(dir, "kit")
+	sourceDir := filepath.Join(dir, "source", ".config", "myapp")
+	require.NoError(t, os.MkdirAll(sourceDir, 0755))
+	fileA := filepath.Join(sourceDir, "a.conf")
+	require.NoError(t, os.WriteFile(fileA, []byte("old"), 0644))
+
+	k := New(kitDir)
+	require.NoError(t, k.Track(fileA, "myapp", ""))
+
+	// #when: updating the same file and re-tracking
+	require.NoError(t, os.WriteFile(fileA, []byte("new"), 0644))
+	require.NoError(t, k.Track(fileA, "myapp", ""))
+
+	// #then: the file is updated
+	content, err := os.ReadFile(filepath.Join(kitDir, "myapp", "a.conf"))
+	require.NoError(t, err)
+	require.Equal(t, "new", string(content))
+}
+
+func TestTrack_FileFromDifferentDirectory_Errors(t *testing.T) {
+	// #given: a file tracked from one directory
+	dir := t.TempDir()
+	kitDir := filepath.Join(dir, "kit")
+
+	dirA := filepath.Join(dir, "source", "dirA")
+	dirB := filepath.Join(dir, "source", "dirB")
+	require.NoError(t, os.MkdirAll(dirA, 0755))
+	require.NoError(t, os.MkdirAll(dirB, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dirA, "a.conf"), []byte("a"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dirB, "b.conf"), []byte("b"), 0644))
+
+	k := New(kitDir)
+	require.NoError(t, k.Track(filepath.Join(dirA, "a.conf"), "myapp", ""))
+
+	// #when: tracking a file from a different directory with the same config name
+	err := k.Track(filepath.Join(dirB, "b.conf"), "myapp", "")
+
+	// #then: returns ErrTargetDirConflict
+	require.ErrorIs(t, err, ErrTargetDirConflict)
+}
+
 func TestUntrack(t *testing.T) {
 	// #given: a tracked config
 	dir := t.TempDir()
