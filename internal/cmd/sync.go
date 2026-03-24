@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/MakeNowJust/heredoc"
 	"github.com/spf13/cobra"
 )
 
@@ -15,8 +16,15 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 	var commitMsg string
 
 	cmd := &cobra.Command{
-		Use:     "sync",
-		Short:   "Sync config and vault via git",
+		Use:   "sync",
+		Short: "Sync config and vault via git",
+		Long: heredoc.Doc(`
+			First run requires -r to set the remote repository:
+			  devctl sync -r <remote-url>
+
+			Subsequent runs will reuse the configured remote (-r is ignored if already set):
+			  devctl sync
+		`),
 		GroupID: "core",
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -28,7 +36,7 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&remoteURL, "remote", "r", "", "remote git repository URL")
+	cmd.Flags().StringVarP(&remoteURL, "remote", "r", "", "remote git repository URL (only needed on first run)")
 	cmd.Flags().StringVarP(&commitMsg, "message", "m", "", "custom commit message")
 	return cmd
 }
