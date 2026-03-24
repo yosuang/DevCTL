@@ -34,16 +34,23 @@ func NewCmdKit(cfg *config.Config) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(newCmdKitStatus(kitDir))
-	cmd.AddCommand(newCmdKitApply(kitDir, vaultDir))
+	// Package management
 	cmd.AddCommand(newCmdKitAdd(kitDir))
 	cmd.AddCommand(newCmdKitRemove(kitDir))
+
+	// Config management
 	cmd.AddCommand(newCmdKitTrack(kitDir))
 	cmd.AddCommand(newCmdKitUntrack(kitDir))
 	cmd.AddCommand(newCmdKitCompile(kitDir, vaultDir))
+
+	// Variable management
 	cmd.AddCommand(newCmdKitSet(kitDir))
 	cmd.AddCommand(newCmdKitUnset(kitDir))
+
+	// Info & actions
+	cmd.AddCommand(newCmdKitStatus(kitDir))
 	cmd.AddCommand(newCmdKitList(kitDir))
+	cmd.AddCommand(newCmdKitApply(kitDir, vaultDir))
 
 	return cmd
 }
