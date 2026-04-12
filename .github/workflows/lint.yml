@@ -2,13 +2,13 @@ name: Lint
 
 on:
   push:
-    branches:
-      - dev
+    branches: [main]
     paths:
       - "**.go"
       - go.mod
       - go.sum
   pull_request:
+    branches: [main]
     paths:
       - "**.go"
       - go.mod
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6.2.0
         with:
-          go-version: '${{ env.GOLANG_VERSION }}'
+          go-version: "${{ env.GOLANG_VERSION }}"
           check-latest: true
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9.2.0

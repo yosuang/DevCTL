@@ -1,4 +1,3 @@
-- The default branch in this repo is `dev`
 - Never force-push, amend, or squash unless asked. Use new commits and normal push for pull request updates
 
 ## Commands
