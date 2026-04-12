@@ -1,0 +1,27 @@
+name: Bug report
+description: Report an issue that should be fixed
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Be specific. Include error messages if any.
+    validations:
+      required: true
+
+  - type: input
+    id: devctl-version
+    attributes:
+      label: DevCTL version
+      description: What version of DevCTL are you using?
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to trigger the bug.
+    validations:
+      required: true
