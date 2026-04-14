@@ -11,17 +11,21 @@ export CGO_LDFLAGS := env("CGO_LDFLAGS", _cgo_ldflags_filtered)
 default:
     @just --list
 
+# Build the devctl binary
 build: _build-script
     @./script/build{{ exe }} bin/devctl{{ exe }}
 
+# Remove build artifacts
 clean: _build-script
     @./script/build{{ exe }} clean
 
+# Run linters and formatters
 check:
     go mod tidy
     golangci-lint{{ exe }} fmt
     golangci-lint{{ exe }} run --fix
 
+# Run all tests
 test:
     go test ./...
 
