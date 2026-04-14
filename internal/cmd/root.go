@@ -18,6 +18,10 @@ import (
 
 var cfg = config.Init()
 
+func init() {
+	cobra.EnableCommandSorting = false
+}
+
 func NewCmdRoot() (*cobra.Command, error) {
 	cmd := &cobra.Command{
 		Use:          "devctl <command> <subcommand> [flags]",
@@ -47,8 +51,9 @@ func NewCmdRoot() (*cobra.Command, error) {
 	cmd.SetVersionTemplate("{{.Version}}\n")
 	cmd.SetUsageTemplate(usageTemplate)
 
-	cmd.AddCommand(NewCmdVault(cfg))
 	cmd.AddCommand(NewCmdKit(cfg))
+	cmd.AddCommand(NewCmdVault(cfg))
+	cmd.AddCommand(NewCmdConfig(cfg))
 	cmd.AddCommand(NewCmdSync(cfg))
 
 	return cmd, nil

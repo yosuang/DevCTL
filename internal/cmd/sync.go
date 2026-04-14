@@ -13,8 +13,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const syncRemoteURLKey = "sync.remote.url"
+
 func NewCmdSync(cfg *config.Config) *cobra.Command {
-	var remoteURL string
 	var commitMsg string
 	var showStatus bool
 
@@ -22,10 +23,8 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 		Use:   "sync",
 		Short: "Sync config and vault via git",
 		Long: heredoc.Doc(`
-			First run requires -r to set the remote repository:
-			  devctl sync -r <remote-url>
-
-			Subsequent runs will reuse the configured remote (-r is ignored if already set):
+			Set the remote URL once, then run sync:
+			  devctl config sync.remote.url <remote-url>
 			  devctl sync
 		`),
 		GroupID: "core",
@@ -45,6 +44,11 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 				return nil
 			}
 
+			remoteURL, err := resolveRemoteURL(cfg)
+			if err != nil {
+				return err
+			}
+
 			if err := r.Sync(remoteURL, commitMsg); err != nil {
 				return syncError(err, cfg)
 			}
@@ -52,10 +56,32 @@ func NewCmdSync(cfg *config.Config) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&remoteURL, "remote", "r", "", "remote git repository URL (only needed on first run)")
 	cmd.Flags().StringVarP(&commitMsg, "message", "m", "", "custom commit message")
 	cmd.Flags().BoolVar(&showStatus, "status", false, "show sync status")
 	return cmd
+}
+
+// resolveRemoteURL reads sync.remote.url from the config store.
+// Returns empty string with no error if the repo is already initialized
+// (sync will ignore the URL in that case). Returns an actionable error
+// if the repo is uninitialized and the key is unset.
+func resolveRemoteURL(cfg *config.Config) (string, error) {
+	store := config.NewStore(cfg.ConfigFile())
+	url, err := store.Get(syncRemoteURLKey)
+	if err == nil {
+		return url, nil
+	}
+	if !errors.Is(err, config.ErrKeyNotFound) {
+		return "", err
+	}
+
+	// Key is unset. If the repo is already initialized, sync can proceed
+	// without it (subsequent syncs don't need the URL). Otherwise, prompt.
+	r := devsync.New(cfg.ConfigDir)
+	if r.IsInitialized() {
+		return "", nil
+	}
+	return "", fmt.Errorf("remote URL not configured\n  Run: devctl config sync.remote.url <URL>")
 }
 
 func printStatus(cmd *cobra.Command, result *devsync.StatusResult) {
@@ -64,7 +90,7 @@ func printStatus(cmd *cobra.Command, result *devsync.StatusResult) {
 	fmt.Fprintf(w, "Sync status: %s\n", result.State)
 
 	if result.State == devsync.StatusNotInitialized {
-		fmt.Fprintln(w, "  Run 'devctl sync -r <remote-url>' to set up sync.")
+		fmt.Fprintln(w, "  Run 'devctl config sync.remote.url <remote-url>' and then 'devctl sync' to set up sync.")
 		return
 	}
 
@@ -122,7 +148,7 @@ func syncError(err error, cfg *config.Config) error {
 	case errors.Is(err, devsync.ErrGitNotInstalled):
 		return fmt.Errorf("%w\nInstall git: https://git-scm.com", err)
 	case errors.Is(err, devsync.ErrRemoteRequired):
-		return fmt.Errorf("%w\nRun: `devctl sync -r <remote-url>`", err)
+		return fmt.Errorf("%w\nRun: devctl config sync.remote.url <URL>", err)
 	case errors.Is(err, devsync.ErrConflict):
 		return fmt.Errorf("%w\nResolve manually:\n  cd %s\n  git pull origin main\n  # fix conflicts\n  git add . && git commit",
 			err, home.Short(cfg.ConfigDir))
