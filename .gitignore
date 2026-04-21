@@ -17,3 +17,6 @@ skills-lock.json
 /.goreleaser.generated.yml
 /script/build
 /script/build.exe
+
+# MacOS
+.DS_Store
