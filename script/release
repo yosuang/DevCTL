@@ -24,7 +24,7 @@ is_local=""
 do_push=""
 platform=""
 branch="main"
-deploy_env="production"
+release_env="production"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -45,11 +45,11 @@ while [ $# -gt 0 ]; do
     shift 1
     ;;
   --staging )
-    deploy_env="staging"
+    release_env="staging"
     shift 1
     ;;
   --current )
-    deploy_env="staging"
+    release_env="staging"
     tag_name="$(git describe --tags --abbrev=0)"
     branch="$(git rev-parse --symbolic-full-name '@{upstream}' 2>/dev/null || git branch --show-current)"
     branch="${branch#refs/remotes/*/}"
@@ -73,8 +73,8 @@ announce() {
   "$@"
 }
 
-trigger_deployment() {
-  announce gh workflow -R yosuang/devctl run deployment.yml --ref "$branch" -f tag_name="$tag_name" -f environment="$deploy_env"
+trigger_release() {
+  announce gh workflow -R yosuang/devctl run release.yml --ref "$branch" -f tag_name="$tag_name" -f environment="$release_env"
 }
 
 build_local() {
@@ -107,9 +107,9 @@ else
     fi
     announce git push
   fi
-  trigger_deployment
-  if [ "$deploy_env" = "production" ]; then
+  trigger_release
+  if [ "$release_env" = "production" ]; then
     echo
-    echo "Manual approval required for production deployment."
+    echo "Manual approval required for production release."
   fi
 fi

@@ -1,4 +1,4 @@
-name: Deployment
+name: Release
 run-name: ${{ inputs.tag_name }} / ${{ inputs.environment }}
 
 concurrency:
