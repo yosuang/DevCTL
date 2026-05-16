@@ -1,6 +1,6 @@
 [tools]
-go = "1.25.1"
-golangci-lint = "2.4.0"
+go = "1.26.3"
+golangci-lint = "2.12.2"
 
 [tasks.build]
 run = "go run ./script/build.go bin/devctl"
