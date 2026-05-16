@@ -1,5 +1,4 @@
 *.local.json
-skills-lock.json
 
 # Agent
 .agents/
