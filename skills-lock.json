@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "skills": {
+    "hunt": {
+      "source": "tw93/Waza",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "3dcebc641b962f9e3ef83ead200919bf9f9f04459a4ac4d73f2de0f83182d38d",
+      "plugin": "waza"
+    },
+    "research": {
+      "source": "yosuang/dotagents",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "de5c45dc3cb924cd970164701ef0ea03e3ccce503885c152e85a82f231ea9f48"
+    },
+    "think": {
+      "source": "tw93/Waza",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "942db63abe1351f81dbdcbcfcb4030ec6e30f41e577ab8e50246e39137f89b11",
+      "plugin": "waza"
+    },
+    "write": {
+      "source": "tw93/Waza",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "c3089096f9f6c32f002cf6df3f1452e22b6695ed730deb6df87a0645184819da",
+      "plugin": "waza"
+    }
+  }
+}
