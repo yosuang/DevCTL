@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"devctl/internal/build"
 	"devctl/internal/config"
 	"devctl/internal/logging"
 	"fmt"
@@ -11,6 +10,12 @@ import (
 
 	"github.com/MakeNowJust/heredoc"
 	"github.com/spf13/cobra"
+)
+
+// Build Info
+var (
+	Version   = "DEV"
+	BuildDate = ""
 )
 
 var cfg = config.Init()
@@ -24,7 +29,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 		Use:          "devctl <command> <subcommand> [flags]",
 		Short:        "Development CLI",
 		Long:         `Development CLI`,
-		Version:      build.FormatVersion(),
+		Version:      formatVersion(),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -53,6 +58,13 @@ func NewCmdRoot() (*cobra.Command, error) {
 
 func rootFlagErrorFunc(_ *cobra.Command, err error) error {
 	return err
+}
+
+func formatVersion() string {
+	if BuildDate != "" {
+		return fmt.Sprintf("%s (%s)", Version, BuildDate)
+	}
+	return Version
 }
 
 func setupLogging(cfg *config.Config) {

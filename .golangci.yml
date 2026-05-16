@@ -35,11 +35,6 @@ linters:
 
     warn-unused: true
 
-    rules:
-      - path: internal/build/
-        linters:
-          - revive
-
     presets:
       - comments
       - std-error-handling
