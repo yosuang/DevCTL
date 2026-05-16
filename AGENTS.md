@@ -2,7 +2,7 @@
 
 ## Commands
 
-- After code changes (not documentation changes): `just check` (get full output, no tail). Fix all errors, warnings, and infos before committing.
+- After code changes (not documentation changes): `mise run check` (get full output, no tail). Fix all errors, warnings, and infos before committing.
 
 ## Testing
 

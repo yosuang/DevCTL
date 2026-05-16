@@ -23,6 +23,5 @@ This exists because AI makes it trivial to generate plausible-looking but low-qu
 ## Before Submitting a PR
 
 ```bash
-just check  # must pass with no errors
-just test   # must pass
+mise run check  # must pass with no errors
 ```
