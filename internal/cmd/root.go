@@ -4,8 +4,6 @@ import (
 	"devctl/internal/build"
 	"devctl/internal/config"
 	"devctl/internal/logging"
-	"devctl/pkg/cmdutil"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,7 +11,6 @@ import (
 
 	"github.com/MakeNowJust/heredoc"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var cfg = config.Init()
@@ -51,19 +48,11 @@ func NewCmdRoot() (*cobra.Command, error) {
 	cmd.SetVersionTemplate("{{.Version}}\n")
 	cmd.SetUsageTemplate(usageTemplate)
 
-	cmd.AddCommand(NewCmdKit(cfg))
-	cmd.AddCommand(NewCmdVault(cfg))
-	cmd.AddCommand(NewCmdConfig(cfg))
-	cmd.AddCommand(NewCmdSync(cfg))
-
 	return cmd, nil
 }
 
 func rootFlagErrorFunc(_ *cobra.Command, err error) error {
-	if errors.Is(err, pflag.ErrHelp) {
-		return err
-	}
-	return cmdutil.FlagErrorWrap(err)
+	return err
 }
 
 func setupLogging(cfg *config.Config) {

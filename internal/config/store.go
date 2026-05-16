@@ -1,5 +1,5 @@
 // store.go implements a flat key-value store backed by settings.json.
-// Keys are arbitrary dotted strings (e.g. "sync.remote.url"); the dot is
+// Keys are arbitrary dotted strings (e.g. "user.name"); the dot is
 // part of the key, not a path into nested JSON.
 package config
 

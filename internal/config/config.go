@@ -1,7 +1,6 @@
 package config
 
 import (
-	"devctl/pkg/home"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -139,5 +138,9 @@ func writeConfigFile(cfg *Config, configFile string) error {
 }
 
 func defaultConfigDir() string {
-	return filepath.Join(home.Dir(), "."+AppName)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "." + AppName
+	}
+	return filepath.Join(homeDir, "."+AppName)
 }

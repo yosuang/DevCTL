@@ -18,7 +18,7 @@ func TestStore_GetMissingKey(t *testing.T) {
 	s := newTestStore(t)
 
 	// #when: get a key that doesn't exist
-	_, err := s.Get("sync.remote.url")
+	_, err := s.Get("user.name")
 
 	// #then: returns ErrKeyNotFound
 	require.ErrorIs(t, err, ErrKeyNotFound)
@@ -29,24 +29,24 @@ func TestStore_SetAndGet(t *testing.T) {
 	s := newTestStore(t)
 
 	// #when: set a key then get it
-	require.NoError(t, s.Set("sync.remote.url", "git@example.com:repo.git"))
-	v, err := s.Get("sync.remote.url")
+	require.NoError(t, s.Set("user.name", "alice"))
+	v, err := s.Get("user.name")
 
 	// #then: returns the value
 	require.NoError(t, err)
-	require.Equal(t, "git@example.com:repo.git", v)
+	require.Equal(t, "alice", v)
 }
 
 func TestStore_SetOverwritesExistingValue(t *testing.T) {
 	// #given: store with a key
 	s := newTestStore(t)
-	require.NoError(t, s.Set("sync.remote.url", "first"))
+	require.NoError(t, s.Set("user.name", "first"))
 
 	// #when: set same key again
-	require.NoError(t, s.Set("sync.remote.url", "second"))
+	require.NoError(t, s.Set("user.name", "second"))
 
 	// #then: value is the new one
-	v, err := s.Get("sync.remote.url")
+	v, err := s.Get("user.name")
 	require.NoError(t, err)
 	require.Equal(t, "second", v)
 }
@@ -54,14 +54,14 @@ func TestStore_SetOverwritesExistingValue(t *testing.T) {
 func TestStore_UnsetRemovesKey(t *testing.T) {
 	// #given: store with two keys
 	s := newTestStore(t)
-	require.NoError(t, s.Set("sync.remote.url", "url"))
+	require.NoError(t, s.Set("user.name", "alice"))
 	require.NoError(t, s.Set("other.key", "other"))
 
 	// #when: unset one key
-	require.NoError(t, s.Unset("sync.remote.url"))
+	require.NoError(t, s.Unset("user.name"))
 
 	// #then: that key is gone, the other remains
-	_, err := s.Get("sync.remote.url")
+	_, err := s.Get("user.name")
 	require.ErrorIs(t, err, ErrKeyNotFound)
 
 	v, err := s.Get("other.key")
@@ -83,9 +83,9 @@ func TestStore_UnsetMissingKey(t *testing.T) {
 func TestStore_ListReturnsSortedPairs(t *testing.T) {
 	// #given: store with several keys added out of order
 	s := newTestStore(t)
-	require.NoError(t, s.Set("sync.remote.url", "url"))
+	require.NoError(t, s.Set("user.name", "alice"))
 	require.NoError(t, s.Set("a.b.c", "abc"))
-	require.NoError(t, s.Set("kit.something", "kit"))
+	require.NoError(t, s.Set("project.name", "devctl"))
 
 	// #when: list
 	pairs, err := s.List()
@@ -94,8 +94,8 @@ func TestStore_ListReturnsSortedPairs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []KeyValue{
 		{Key: "a.b.c", Value: "abc"},
-		{Key: "kit.something", Value: "kit"},
-		{Key: "sync.remote.url", Value: "url"},
+		{Key: "project.name", Value: "devctl"},
+		{Key: "user.name", Value: "alice"},
 	}, pairs)
 }
 
