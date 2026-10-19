@@ -2,35 +2,10 @@
 go = "1.26.3"
 golangci-lint = "2.12.2"
 
-[tasks.build]
-run = "go run ./script/build.go bin/devctl"
-sources = [
-  "go.mod",
-  "go.sum",
-  "cmd/**/*.go",
-  "internal/**/*.go",
-  "pkg/**/*.go",
-  "script/build.go"
-]
-outputs = ["bin/devctl*"]
+[tasks.dev]
+description = "Build the local devctl binary"
+run = "./build/dev.sh"
 
 [tasks.clean]
+description = "Remove build artifacts"
 run = "go run ./script/build.go clean"
-
-[tasks.fmt]
-run = [
-  "go mod tidy",
-  "golangci-lint fmt"
-]
-
-[tasks.lint]
-run = "golangci-lint run"
-
-[tasks.test]
-run = "go test ./..."
-
-[tasks.check]
-run = [
-  { task = "lint" },
-  { task = "test" }
-]

@@ -23,5 +23,7 @@ This exists because AI makes it trivial to generate plausible-looking but low-qu
 ## Before Submitting a PR
 
 ```bash
-mise run check  # must pass with no errors
+make dev
+go test ./...
+golangci-lint run
 ```

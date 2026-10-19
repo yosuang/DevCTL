@@ -22,8 +22,17 @@ var tasks = map[string]func(string) error{
 		}
 
 		buildTags, _ := os.LookupEnv("GO_BUILDTAGS")
+		version := os.Getenv("DEVCTL_VERSION")
+		if version == "" {
+			version = "DEV"
+		}
+		buildDate := os.Getenv("DEVCTL_BUILD_DATE")
+		if buildDate == "" {
+			buildDate = time.Now().Format(time.DateOnly)
+		}
+		ldflags := fmt.Sprintf("-s -w -X devctl/internal/build.Version=%s -X devctl/internal/build.BuildDate=%s", version, buildDate)
 
-		args := []string{"go", "build", "-trimpath"}
+		args := []string{"go", "build", "-trimpath", "-ldflags", ldflags}
 		if buildTags != "" {
 			args = append(args, "-tags", buildTags)
 		}
@@ -32,7 +41,7 @@ var tasks = map[string]func(string) error{
 		return run(args...)
 	},
 	"clean": func(_ string) error {
-		return rmrf("bin", "share")
+		return rmrf("bin", "dist", "share", ".goreleaser.generated.yml")
 	},
 }
 
