@@ -1,9 +1,59 @@
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DevCTL</title>
+    <style>
+      body {
+        margin: 1.5rem;
+        font-family: sans-serif;
+        line-height: 1.4;
+      }
+      h1 {
+        font-size: 1.4rem;
+      }
+      #fingerprint {
+        font-family: monospace;
+        font-size: 1.4rem;
+        letter-spacing: 0.06em;
+      }
+      video,
+      textarea,
+      label {
+        display: block;
+      }
+      video,
+      textarea {
+        width: 100%;
+        max-width: 28rem;
+      }
+      textarea {
+        height: 6rem;
+      }
+      label,
+      button {
+        margin-top: 1rem;
+      }
+      button {
+        font-size: 1.1rem;
+        padding: 0.7rem 1.2rem;
+      }
+      button:disabled {
+        opacity: 0.45;
+      }
+    </style>
   </head>
   <body>
-    <p>Static pairing shell. This batch does not submit a pairing.</p>
+    <h1>Confirm pairing</h1>
+    <p>Receiver fingerprint</p>
+    <p id="fingerprint"></p>
+    <video id="camera" autoplay muted playsinline></video>
+    <label for="ticket">Ticket</label>
+    <textarea id="ticket" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+    <button id="confirm" type="button" disabled>Confirm</button>
+    <p id="status" aria-live="polite"></p>
+    <script src="/jsQR.js"></script>
+    <script type="module" src="/page.js"></script>
   </body>
 </html>
