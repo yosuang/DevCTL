@@ -1,5 +1,9 @@
 - Never force-push, amend, or squash unless asked. Use new commits and normal push for pull request updates
 
+## Language
+
+Reply to the user in Chinese. Write repository text in English, including code, comments, CLI copy, and docs.
+
 ## Principles
 
 1. **Think Before Coding**: Don't assume. Don't hide confusion. Surface tradeoffs.
