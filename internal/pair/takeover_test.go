@@ -280,6 +280,104 @@ func TestExplicitSaveSurvivesConsumed(t *testing.T) {
 	}
 }
 
+func TestFailedExpiryJournalIsNotServerOutcome(t *testing.T) {
+	// #given a default takeover and a journal install that fails
+	// #when the server expires or cancels
+	// #then the error is not that server outcome and stop leaves the plaintext
+	for _, state := range []string{"expired", "cancelled"} {
+		t.Run(state, func(t *testing.T) {
+			useFastKDF(t)
+			config := t.TempDir()
+			hash := exampleTicketHash(0x51)
+			env := sealFast(t, hash)
+			prompt := &recordingPrompt{pass: examplePassphrase}
+			err := receiveCopy(config, "", prompt, hash, env, func([]byte) (string, error) {
+				return "", errors.New("down")
+			})
+			if codeOf(err) != "ack_pending" || prompt.passCalls != 1 {
+				t.Fatalf("setup: %s", codeOf(err))
+			}
+			ticket, err := ticketPath(config, hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prev := installJournalFile
+			installJournalFile = func(string, string) error { return errors.New("full") }
+			t.Cleanup(func() { installJournalFile = prev })
+			err = receiveCopy(config, "", prompt, hash, nil, func([]byte) (string, error) {
+				return state, nil
+			})
+			if codeOf(err) == state || codeOf(err) != "copy_incomplete" {
+				t.Fatalf("outcome %s", codeOf(err))
+			}
+			assertNoMaterial(t, err)
+			if _, err := os.Stat(filepath.Join(ticket, copyFileName)); err != nil {
+				t.Fatal("copy is missing")
+			}
+			record, ok := copyReady(ticket, hash)
+			if !ok || record.Phase != phaseCopyComplete || record.Saved || record.Observed != "" {
+				t.Fatal("failed install changed the stored journal")
+			}
+			if err := ReleaseTemporary(config, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(ticket, copyFileName)); err != nil {
+				t.Fatal("stop deleted the plaintext")
+			}
+			record, ok = copyReady(ticket, hash)
+			if !ok || record.Saved {
+				t.Fatal("stop marked the default copy saved")
+			}
+		})
+	}
+}
+
+func TestExpiryReadBackRequiresObserved(t *testing.T) {
+	// #given a default takeover whose installed journal omits the server outcome
+	// #when the server expires
+	// #then the result is not that server outcome and stop leaves the plaintext
+	useFastKDF(t)
+	config := t.TempDir()
+	hash := exampleTicketHash(0x52)
+	env := sealFast(t, hash)
+	prompt := &recordingPrompt{pass: examplePassphrase}
+	if err := receiveCopy(config, "", prompt, hash, env, func([]byte) (string, error) {
+		return "", errors.New("down")
+	}); codeOf(err) != "ack_pending" {
+		t.Fatalf("setup: %s", codeOf(err))
+	}
+	ticket, err := ticketPath(config, hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(filepath.Join(ticket, journalFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := installJournalFile
+	installJournalFile = func(_, final string) error {
+		return os.WriteFile(final, original, 0o600)
+	}
+	t.Cleanup(func() { installJournalFile = prev })
+	err = receiveCopy(config, "", prompt, hash, nil, func([]byte) (string, error) {
+		return "expired", nil
+	})
+	if codeOf(err) == "expired" || codeOf(err) != "copy_incomplete" {
+		t.Fatalf("outcome %s", codeOf(err))
+	}
+	assertNoMaterial(t, err)
+	if err := ReleaseTemporary(config, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(ticket, copyFileName)); err != nil {
+		t.Fatal("stop deleted the plaintext")
+	}
+	record, ok := copyReady(ticket, hash)
+	if !ok || record.Saved || record.Observed != "" {
+		t.Fatal("default copy was marked saved")
+	}
+}
+
 func TestTakeoverTwoTicketsUseTwoDirectories(t *testing.T) {
 	useFastKDF(t)
 	config := t.TempDir()

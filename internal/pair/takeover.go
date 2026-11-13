@@ -195,16 +195,19 @@ func observeAck(dir string, record journal, ack func([]byte) (string, error)) er
 	if state != "expired" && state != "cancelled" {
 		return localCode("ack_pending", "acknowledgment was not observed")
 	}
-	// The local file stays. This status is the server outcome, and it is not delivered.
+	// The local file stays. This status is the server outcome only after the
+	// journal records it. A failed write is not that outcome, and it is not delivered.
 	record.Phase = phaseCopyComplete
 	record.Observed = state
-	_ = saveJournal(dir, record)
+	if err := saveJournal(dir, record); err != nil {
+		return err
+	}
 	got, ok := copyReady(dir, ticketHash)
-	if !ok || got.Phase != phaseCopyComplete {
-		return serverCode(state, "the server copy is gone")
+	if !ok || got.Phase != phaseCopyComplete || got.Observed != state {
+		return localCode("copy_incomplete", "copy does not match")
 	}
 	if _, err := os.Stat(filepath.Join(dir, copyFileName)); err != nil {
-		return serverCode(state, "the server copy is gone")
+		return localCode("copy_incomplete", "copy does not match")
 	}
 	return serverCode(state, "the server copy is gone")
 }
@@ -370,14 +373,44 @@ func ReleaseTemporary(configDir, prefix string) error {
 
 func copyKept(configDir, hashHex string) (bool, error) {
 	dir := filepath.Join(configDir, pairFolderName, "ticket-"+hashHex)
+	return plaintextKept(dir)
+}
+
+// plaintextKept reports whether stop must leave the takeover plaintext in place.
+// A missing journal is not proof that the copy is temporary: installing an
+// expiry record can remove the old journal before the new one is in place.
+// A synced partial from that failed install still keeps the copy.
+func plaintextKept(dir string) (bool, error) {
 	record, err := readJournal(filepath.Join(dir, journalFileName))
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
+		if !errors.Is(err, os.ErrNotExist) {
+			return false, localCode("copy_incomplete", "copy does not match")
 		}
-		return false, localCode("copy_incomplete", "copy does not match")
+		return true, nil
 	}
-	return keepCopy(record), nil
+	if keepCopy(record) {
+		return true, nil
+	}
+	return partialKeeps(dir)
+}
+
+func partialKeeps(dir string) (bool, error) {
+	record, err := readJournal(filepath.Join(dir, journalPartialName))
+	if err != nil || !keepCopy(record) {
+		return false, nil
+	}
+	if record.TicketHash != strings.TrimPrefix(filepath.Base(dir), "ticket-") {
+		return false, nil
+	}
+	body, err := os.ReadFile(filepath.Join(dir, copyFileName))
+	if err != nil {
+		return false, nil
+	}
+	sum := sha256.Sum256(body)
+	if subtle.ConstantTimeCompare(sum[:], decodeHash(record.CopyHash)) != 1 {
+		return false, nil
+	}
+	return true, nil
 }
 
 func releaseByHash(configDir, hashHex string) error {
@@ -395,14 +428,11 @@ func releaseByHash(configDir, hashHex string) error {
 	if !info.IsDir() {
 		return nil
 	}
-	record, err := readJournal(filepath.Join(dir, journalFileName))
+	kept, err := plaintextKept(dir)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return removePlaintext(dir)
-		}
-		return localCode("copy_incomplete", "copy does not match")
+		return err
 	}
-	if keepCopy(record) {
+	if kept {
 		return nil
 	}
 	return removePlaintext(dir)
@@ -613,7 +643,7 @@ func saveJournal(dir string, record journal) error {
 		return err
 	}
 	final := filepath.Join(dir, journalFileName)
-	if err := replaceFile(partial, final); err != nil {
+	if err := installJournalFile(partial, final); err != nil {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}
 	if err := restrictFile(final); err != nil {
@@ -652,6 +682,10 @@ func marshalJournal(record journal) ([]byte, error) {
 	}
 	return json.Marshal(record)
 }
+
+// installJournalFile moves a synced journal partial into place.
+// A failed install leaves that partial on disk. Tests replace this.
+var installJournalFile = replaceFile
 
 func replaceFile(partial, final string) error {
 	if err := os.Rename(partial, final); err == nil {
