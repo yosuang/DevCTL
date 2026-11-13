@@ -84,26 +84,45 @@ func TestPhoneConfirmProxyLifecycle(t *testing.T) {
 	})
 	t.Run("expired", func(t *testing.T) {
 		// #given a journal that records expiry after takeover
-		// #when proxy stop runs
+		// #when issue, the phone confirm HTTP path, receive, proxy start, and proxy stop run
 		// #then pair/ticket-<hash>/copy stays and is not marked saved
-		// A cancelled journal uses the same keep rule. One local coordinator admits three tickets, so this run records expiry.
-		dir := takeover(t, origin, bin, "")
-		hash := oneTicketHash(t, dir)
-		copyPath := ticketCopyPath(dir, hash)
-		markPostTakeover(t, filepath.Dir(copyPath), "expired")
-		journal := readFile(t, filepath.Join(filepath.Dir(copyPath), journalFileName))
-		if bytes.Contains(journal, []byte(`"saved"`)) || bytes.Contains(journal, []byte(`"phase":"delivered"`)) {
-			t.Fatal("treated as saved")
-		}
-		startOut, stopOut := runProxy(t, bin, dir, core)
-		if string(readFile(t, copyPath)) != exampleURI {
-			t.Fatal("copy was deleted")
-		}
-		if !bytes.Equal(readFile(t, filepath.Join(filepath.Dir(copyPath), journalFileName)), journal) {
-			t.Fatal("journal")
-		}
-		assertListeningOnly(t, startOut, stopOut)
+		keepObservedCopy(t, origin, bin, core, "expired")
 	})
+}
+
+func TestPhoneConfirmCancelledKeepsCopy(t *testing.T) {
+	// #given a journal that records cancellation after takeover
+	// #when issue, the phone confirm HTTP path, receive, proxy start, and proxy stop run
+	// #then pair/ticket-<hash>/copy stays and is not marked saved
+	// This coordinator admits three tickets, so cancellation uses its own loopback instance.
+	root := moduleRoot(t)
+	bin := buildDevctl(t, root)
+	origin := startWrangler(t, root)
+	core := lifecycleCore(t, root)
+	keepObservedCopy(t, origin, bin, core, "cancelled")
+}
+
+func keepObservedCopy(t *testing.T, origin, bin, core, observed string) {
+	t.Helper()
+	dir := takeover(t, origin, bin, "")
+	hash := oneTicketHash(t, dir)
+	copyPath := ticketCopyPath(dir, hash)
+	markPostTakeover(t, filepath.Dir(copyPath), observed)
+	journal := readFile(t, filepath.Join(filepath.Dir(copyPath), journalFileName))
+	if bytes.Contains(journal, []byte(`"saved"`)) || bytes.Contains(journal, []byte(`"phase":"delivered"`)) {
+		t.Fatal("treated as saved")
+	}
+	if !bytes.Contains(journal, []byte(`"observed":"`+observed+`"`)) {
+		t.Fatal("observed")
+	}
+	startOut, stopOut := runProxy(t, bin, dir, core)
+	if string(readFile(t, copyPath)) != exampleURI {
+		t.Fatal("copy was deleted")
+	}
+	if !bytes.Equal(readFile(t, filepath.Join(filepath.Dir(copyPath), journalFileName)), journal) {
+		t.Fatal("journal")
+	}
+	assertListeningOnly(t, startOut, stopOut)
 }
 
 func takeover(t *testing.T, origin, bin, saveDir string) string {
