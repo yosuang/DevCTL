@@ -497,6 +497,59 @@ func TestRetryDropsExpiryPartialStillKeepsCopy(t *testing.T) {
 	}
 }
 
+func TestSyncedJournalNextKeepsExpiryCopy(t *testing.T) {
+	// #given a default takeover whose keep install leaves journal.next in place
+	// #when the server expires or cancels
+	// #then the error is copy_incomplete and stop leaves the plaintext
+	for _, state := range []string{"expired", "cancelled"} {
+		t.Run(state, func(t *testing.T) {
+			useFastKDF(t)
+			config := t.TempDir()
+			hash := exampleTicketHash(0x63)
+			env := sealFast(t, hash)
+			prompt := &recordingPrompt{pass: examplePassphrase}
+			err := receiveCopy(config, "", prompt, hash, env, func([]byte) (string, error) {
+				return "", errors.New("down")
+			})
+			if codeOf(err) != "ack_pending" || prompt.passCalls != 1 {
+				t.Fatalf("setup: %s", codeOf(err))
+			}
+			ticket, err := ticketPath(config, hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prev := replaceKeepJournal
+			replaceKeepJournal = func(string, string) error { return errors.New("busy") }
+			t.Cleanup(func() { replaceKeepJournal = prev })
+			err = receiveCopy(config, "", prompt, hash, nil, func([]byte) (string, error) {
+				return state, nil
+			})
+			if codeOf(err) == state || codeOf(err) != "copy_incomplete" {
+				t.Fatalf("outcome %s", codeOf(err))
+			}
+			assertNoMaterial(t, err)
+			record, ok := copyReady(ticket, hash)
+			if !ok || record.Phase != phaseCopyComplete || record.Saved || record.Observed != "" {
+				t.Fatal("installed journal was replaced")
+			}
+			next, err := readJournal(filepath.Join(ticket, journalNextName))
+			if err != nil || next.Observed != state || next.Saved {
+				t.Fatal("synced journal.next is not the keep")
+			}
+			if err := ReleaseTemporary(config, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(ticket, copyFileName)); err != nil {
+				t.Fatal("stop deleted the plaintext")
+			}
+			record, ok = copyReady(ticket, hash)
+			if !ok || record.Saved {
+				t.Fatal("stop marked the default copy saved")
+			}
+		})
+	}
+}
+
 func TestTakeoverTwoTicketsUseTwoDirectories(t *testing.T) {
 	useFastKDF(t)
 	config := t.TempDir()

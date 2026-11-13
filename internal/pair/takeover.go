@@ -380,7 +380,7 @@ func copyKept(configDir, hashHex string) (bool, error) {
 // plaintextKept reports whether stop must leave the takeover plaintext in place.
 // A missing journal is not proof that the copy is temporary: installing an
 // expiry record can remove the old journal before the new one is in place.
-// A synced partial from that failed install still keeps the copy.
+// A synced journal.partial or journal.next from that failed install still keeps the copy.
 func plaintextKept(dir string) (bool, error) {
 	record, err := readJournal(filepath.Join(dir, journalFileName))
 	if err != nil {
@@ -392,11 +392,19 @@ func plaintextKept(dir string) (bool, error) {
 	if keepCopy(record) {
 		return true, nil
 	}
-	return partialKeeps(dir)
+	kept, err := partialKeeps(dir)
+	if err != nil || kept {
+		return kept, err
+	}
+	return sideKeeps(dir, journalNextName)
 }
 
 func partialKeeps(dir string) (bool, error) {
-	record, err := readJournal(filepath.Join(dir, journalPartialName))
+	return sideKeeps(dir, journalPartialName)
+}
+
+func sideKeeps(dir, name string) (bool, error) {
+	record, err := readJournal(filepath.Join(dir, name))
 	if err != nil || !keepCopy(record) {
 		return false, nil
 	}
@@ -652,6 +660,11 @@ func saveJournal(dir string, record journal) error {
 	if err := installJournalFile(partial, final); err != nil {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}
+	// The installed journal is now authoritative. A leftover journal.next must
+	// not keep a later temporary copy.
+	if err := os.Remove(filepath.Join(dir, journalNextName)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return localCode("copy_incomplete", "copy could not be saved")
+	}
 	if err := restrictFile(final); err != nil {
 		return err
 	}
@@ -696,6 +709,9 @@ var installJournalFile = replaceFile
 // writeJournalPartial writes the unsynced journal partial. Tests replace this.
 var writeJournalPartial = writeUnsynced
 
+// replaceKeepJournal installs a synced journal.next onto journal. Tests replace this.
+var replaceKeepJournal = replaceFile
+
 // preserveKeep installs a keep record before journal.partial is opened.
 // An expiry write that fails before that partial survives must still leave
 // the plaintext in place for proxy stop.
@@ -727,7 +743,7 @@ func installKeepJournal(dir string, raw []byte) error {
 		return err
 	}
 	final := filepath.Join(dir, journalFileName)
-	if err := replaceFile(next, final); err != nil {
+	if err := replaceKeepJournal(next, final); err != nil {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}
 	if err := restrictFile(final); err != nil {
