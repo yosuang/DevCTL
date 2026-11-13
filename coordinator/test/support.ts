@@ -320,6 +320,7 @@ export async function dumpSession(name: string): Promise<{
   columns: string[];
   text: string;
   hintSeed: string | null;
+  hintHash: string | null;
   pubkey: string | null;
   state: string | null;
   helloNonce: string | null;
@@ -335,9 +336,10 @@ export async function dumpSession(name: string): Promise<{
         pubkey: string | null;
         state: string | null;
         hint_seed_nonce: string | null;
+        hint_ticket_hash: string | null;
         hello_nonce: string | null;
         expires_at: number | null;
-      }>("SELECT pubkey, state, hint_seed_nonce, hello_nonce, expires_at FROM session WHERE id = 1")
+      }>("SELECT pubkey, state, hint_seed_nonce, hint_ticket_hash, hello_nonce, expires_at FROM session WHERE id = 1")
       .toArray();
     const all = state.storage.sql.exec("SELECT * FROM session WHERE id = 1").toArray();
     const row = rows[0];
@@ -345,6 +347,7 @@ export async function dumpSession(name: string): Promise<{
       columns,
       text: JSON.stringify({ columns, all }),
       hintSeed: row?.hint_seed_nonce ?? null,
+      hintHash: row?.hint_ticket_hash ?? null,
       pubkey: row?.pubkey ?? null,
       state: row?.state ?? null,
       helloNonce: row?.hello_nonce ?? null,

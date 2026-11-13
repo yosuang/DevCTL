@@ -178,7 +178,6 @@ export class SessionDO extends DurableObject<Env> {
     if (!seed || !Number.isFinite(hint.expires_at)) return false;
     const row = this.#load();
     if (!row?.pubkey || row.state === "expired") return false;
-    if (row.expires_at !== null && Date.now() >= Number(row.expires_at)) return false;
     this.ctx.storage.sql.exec(
       `UPDATE session
        SET hint_v = ?, hint_state = ?, hint_ticket_hash = ?, hint_seed_nonce = ?, hint_expires_at = ?, expires_at = ?

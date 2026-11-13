@@ -57,7 +57,7 @@ it("session storage has no envelope", async () => {
   expect(ticket.state).toBe("bound");
 });
 
-it("failed notification does not roll back a bind", async () => {
+it("confirm after the hello timer still binds and a retry stores the hint", async () => {
   const who = await receiver();
   const session = await openSession("ntfy", who);
   await runInDurableObject(session.stub, async (_instance, state) => {
@@ -78,20 +78,18 @@ it("failed notification does not roll back a bind", async () => {
       pubkey: who.raw,
     }),
   });
-  expect(result.error).toBe("bound_notify_pending");
   expect(result.state).toBe("bound");
-  expect(Object.keys(result).sort()).toEqual(["error", "expires_at", "fingerprint", "state", "v"].sort());
+  expect(result.error).toBeUndefined();
   const ticket = await dumpTicket(opened.name);
   expect(ticket.state).toBe("bound");
   expect(ticket.envelope).toBe(opened.envelope);
   expect(ticket.expires_at).toBe(beforeExpiry);
   expect(ticket.seed_nonce).toBeTypeOf("string");
   expect(JSON.stringify(result)).not.toContain(ticket.seed_nonce ?? "");
-  expect((await dumpSession(session.name)).hintSeed).toBeNull();
-
-  await runInDurableObject(session.stub, async (_instance, state) => {
-    state.storage.sql.exec("UPDATE session SET expires_at = ? WHERE id = 1", Date.now() + 60_000);
-  });
+  const hinted = await dumpSession(session.name);
+  expect(hinted.state).toBe("active");
+  expect(hinted.hintSeed).toBe(ticket.seed_nonce);
+  expect(hinted.expiresAt).toBe(ticket.expires_at);
   const retry = await opened.stub.challenge({ purpose: "confirm" });
   const second = await finishConfirm(env, {
     ticket: opened.ticket,
@@ -108,11 +106,18 @@ it("failed notification does not roll back a bind", async () => {
   expect(second.error).toBeUndefined();
   expect(second.state).toBe("bound");
   const after = await dumpTicket(opened.name);
+  expect(after.state).toBe("bound");
   expect(after.envelope).toBe(opened.envelope);
   expect(after.expires_at).toBe(beforeExpiry);
   expect(after.seed_nonce).toBe(ticket.seed_nonce);
   expect(after.op).toBe(0);
-  expect((await dumpSession(session.name)).hintSeed).toBe(ticket.seed_nonce);
+  const stored = await dumpSession(session.name);
+  expect(stored.state).toBe("active");
+  expect(stored.hintSeed).toBe(ticket.seed_nonce);
+  expect(stored.hintHash).toBe(opened.name);
+  expect(stored.expiresAt).toBe(beforeExpiry);
+  expect(stored.text).not.toContain(CIPHERTEXT);
+  expect(stored.text).not.toContain(opened.ticket);
 });
 
 it("hello rejects a different public key and keeps the nonce", async () => {

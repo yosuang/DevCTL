@@ -88,6 +88,20 @@ it("publishes one vocabulary for states, errors, envelopes, and signature order"
   expect(protocol.routes.ticket_ack).toBe(protocol.signatures.ack.path);
   expect(protocol.routes.session_wait).toBe(protocol.signatures.wait.path);
   expect(protocol.routes.ticket_challenge).toBe(protocol.signatures.challenge.path);
+  expect(protocol.bodies.read).toEqual(["v", "ticket_hash", "pubkey", "nonce", "counter", "signature"]);
+  expect(protocol.bodies.ack).toEqual(["v", "ticket_hash", "pubkey", "nonce", "counter", "signature"]);
+  expect(protocol.bodies.ticket_challenge).toEqual(["v", "ticket_hash", "purpose"]);
+  expect(protocol.bodies.ticket_challenge_redeem).toEqual([
+    "v",
+    "ticket_hash",
+    "purpose",
+    "pubkey",
+    "signature",
+  ]);
+  expect(protocol.bodies.confirm).toContain("ticket");
+  expect(protocol.bodies.cancel).toContain("ticket");
+  expect(protocol.bodies.status).toContain("ticket");
+  expect(protocol.bodies.ticket_preview).toContain("ticket");
 
   const zero = new Uint8Array([1 - 1]);
   const counter = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 7]);

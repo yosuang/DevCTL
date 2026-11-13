@@ -12,7 +12,7 @@ export interface RateLimited {
   error: "rate_limited";
 }
 
-function windowId(now: number): number {
+export function windowId(now: number): number {
   return Math.floor(now / protocol.limits.window_ms);
 }
 
@@ -36,20 +36,21 @@ export async function admit(env: Env, source: string): Promise<Grant | RateLimit
   const name = await sourceObjectName(source);
   const shard = env.GATE.getByName(await shardObjectName(source));
   const sourceDo = env.GATE.getByName(name);
-  let released = 0;
+  let released: number[] = [];
   try {
     released = await sourceDo.releaseExpired(Date.now());
   } catch {
     return { error: "rate_limited" };
   }
-  for (let i = 0; i < released; i++) {
+  for (const window of released) {
     try {
-      await shard.refund();
+      await shard.refund(window);
     } catch {
       // A missed refund over-counts. Creation still fails closed below.
     }
   }
   let debited = false;
+  const debitedWindow = windowId(Date.now());
   try {
     debited = await shard.debit();
   } catch {
@@ -60,7 +61,7 @@ export async function admit(env: Env, source: string): Promise<Grant | RateLimit
     const grant = await sourceDo.tryAdmit(Date.now());
     if (!grant) {
       try {
-        await shard.refund();
+        await shard.refund(debitedWindow);
       } catch {
         // Over-count, still deny.
       }
@@ -69,7 +70,7 @@ export async function admit(env: Env, source: string): Promise<Grant | RateLimit
     return { id: grant.id, source_name: name, expires_at: grant.expires_at };
   } catch {
     try {
-      await shard.refund();
+      await shard.refund(debitedWindow);
     } catch {
       // Over-count, still deny.
     }
@@ -116,31 +117,37 @@ export class CreateGate extends DurableObject<Env> {
     return true;
   }
 
-  async refund(): Promise<boolean> {
+  async refund(window: number): Promise<boolean> {
     try {
       const rows = this.ctx.storage.sql
-        .exec<{ count: number }>("SELECT count FROM counter WHERE id = 1")
+        .exec<{ window: number; count: number }>("SELECT window, count FROM counter WHERE id = 1")
         .toArray();
-      const count = rows[0] ? Number(rows[0].count) : 0;
+      const current = rows[0];
+      if (!current || Number(current.window) !== window) return true;
+      const count = Number(current.count);
       if (count <= 0) return true;
-      this.ctx.storage.sql.exec("UPDATE counter SET count = ? WHERE id = 1", count - 1);
+      this.ctx.storage.sql.exec(
+        "UPDATE counter SET count = ? WHERE id = 1 AND window = ?",
+        count - 1,
+        window,
+      );
       return true;
     } catch {
       return false;
     }
   }
 
-  async releaseExpired(now: number): Promise<number> {
+  async releaseExpired(now: number): Promise<number[]> {
     const rows = this.ctx.storage.sql
-      .exec<{ id: string }>(
-        "SELECT id FROM grant_row WHERE ticket_hash IS NULL AND expires_at <= ?",
+      .exec<{ id: string; window: number }>(
+        "SELECT id, window FROM grant_row WHERE ticket_hash IS NULL AND expires_at <= ?",
         now,
       )
       .toArray();
     for (const row of rows) {
       this.ctx.storage.sql.exec("DELETE FROM grant_row WHERE id = ?", row.id);
     }
-    return rows.length;
+    return rows.map((row) => Number(row.window));
   }
 
   async tryAdmit(now: number): Promise<{ id: string; expires_at: number } | null> {

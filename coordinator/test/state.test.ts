@@ -665,4 +665,78 @@ describe("ticket state", () => {
     });
     expect(accepted.state).toBe("bound");
   });
+
+  it("an unauthenticated challenge does not replace a live op nonce", async () => {
+    const { who, opened } = await bound("liveop");
+    const nonce = await redeem(opened, who);
+    const again = await opened.stub.challenge({ purpose: "op" });
+    expect(again.nonce).toBe(nonce);
+    expect((await dumpTicket(opened.name)).op_nonce).toBe(nonce);
+    const signature = await signedRead({ who, nonce, ticketHash: opened.name, counter: 0 });
+    const [read, raced] = await Promise.all([
+      opened.stub.read({ pubkey: who.b64, nonce, counter: 0, signature, origin: ORIGIN }),
+      opened.stub.challenge({ purpose: "op" }),
+    ]);
+    expect(read.envelope).toBe(opened.envelope);
+    expect(read.state).toBe("bound");
+    expect(raced.error).toBeUndefined();
+    const row = await dumpTicket(opened.name);
+    expect(row.op).toBe(1);
+    expect(row.envelope).toBe(opened.envelope);
+    const hash = row.envelope_sha256 ?? "";
+    const ackNonce = (await opened.stub.challenge({ purpose: "op" })).nonce ?? "";
+    expect((await dumpTicket(opened.name)).op_nonce).toBe(ackNonce);
+    const ackSignature = await signedAck({
+      who,
+      nonce: ackNonce,
+      ticketHash: opened.name,
+      counter: 1,
+      envelopeHash: hash,
+    });
+    const [ack, ackRace] = await Promise.all([
+      opened.stub.ack({
+        pubkey: who.b64,
+        nonce: ackNonce,
+        counter: 1,
+        signature: ackSignature,
+        origin: ORIGIN,
+      }),
+      opened.stub.challenge({ purpose: "op" }),
+    ]);
+    expect(ack.state).toBe("consumed");
+    expect(ack.envelope).toBeUndefined();
+    expect(ackRace.error).toBeUndefined();
+    const consumed = await dumpTicket(opened.name);
+    expect(consumed.state).toBe("consumed");
+    expect(consumed.envelope).toBeNull();
+  });
+
+  it("an unauthenticated cancel challenge does not replace a live cancel nonce", async () => {
+    const opened = await openTicket("livecan");
+    const first = await opened.stub.challenge({ purpose: "cancel" });
+    const second = await opened.stub.challenge({ purpose: "cancel" });
+    expect(second.nonce).toBe(first.nonce);
+    const issuer = exampleBytes("livecani");
+    const { requestDigest } = await import("../src/sign");
+    const digest = encodeB64Url(
+      await requestDigest("cancel", {
+        nonce: bytesOf(first.nonce ?? "", protocol.nonce_bytes),
+        ticket_hash: hexOf(opened.name),
+        issuer_hash: await sha256(issuer),
+      }),
+    );
+    const [cancelled, raced] = await Promise.all([
+      opened.stub.cancel({
+        issuer_capability: encodeB64Url(issuer),
+        nonce: first.nonce ?? "",
+        digest,
+      }),
+      opened.stub.challenge({ purpose: "cancel" }),
+    ]);
+    expect(cancelled.state).toBe("cancelled");
+    expect(raced.error).toBeUndefined();
+    const row = await dumpTicket(opened.name);
+    expect(row.state).toBe("cancelled");
+    expect(row.envelope).toBeNull();
+  });
 });

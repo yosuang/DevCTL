@@ -29,6 +29,11 @@ async function locate(secret: string): Promise<Located | null> {
   return { stubName: encodeHex(await sha256(raw)) };
 }
 
+function hashName(value: string | null): string | null {
+  if (!value || !/^[0-9a-f]{64}$/.test(value)) return null;
+  return value;
+}
+
 function pageBody(result: PageResult): Response {
   return jsonResponse(result, pageStatus(result));
 }
@@ -95,12 +100,11 @@ async function handlePost(request: Request, env: Env, url: URL): Promise<Respons
   if (path === protocol.routes.ticket_challenge) {
     const shaped = oneOf(parsed, [protocol.bodies.ticket_challenge, protocol.bodies.ticket_challenge_redeem]);
     if (!shaped.ok) return errorResponse(shaped.error);
-    const ticket = textField(shaped.value, "ticket");
+    const ticketHash = hashName(textField(shaped.value, "ticket_hash"));
     const purpose = textField(shaped.value, "purpose");
-    const located = ticket ? await locate(ticket) : null;
-    if (!ticket || !purpose || !located) return errorResponse("bad_request");
+    if (!ticketHash || !purpose) return errorResponse("bad_request");
     return ticketBody(
-      await env.TICKET.getByName(located.stubName).challenge({
+      await env.TICKET.getByName(ticketHash).challenge({
         purpose,
         pubkey: textField(shaped.value, "pubkey") ?? undefined,
         signature: textField(shaped.value, "signature") ?? undefined,
@@ -153,14 +157,13 @@ async function handlePost(request: Request, env: Env, url: URL): Promise<Respons
     const keys = path === protocol.routes.ticket_read ? protocol.bodies.read : protocol.bodies.ack;
     const shaped = objectShape(parsed, keys);
     if (!shaped.ok) return errorResponse(shaped.error);
-    const ticket = textField(shaped.value, "ticket");
+    const ticketHash = hashName(textField(shaped.value, "ticket_hash"));
     const pubkey = textField(shaped.value, "pubkey");
     const nonce = textField(shaped.value, "nonce");
     const signature = textField(shaped.value, "signature");
     const counter = intField(shaped.value, "counter");
-    const located = ticket ? await locate(ticket) : null;
-    if (!pubkey || !nonce || !signature || counter === null || !located) return errorResponse("bad_request");
-    const stub = env.TICKET.getByName(located.stubName);
+    if (!pubkey || !nonce || !signature || counter === null || !ticketHash) return errorResponse("bad_request");
+    const stub = env.TICKET.getByName(ticketHash);
     const input = { pubkey, nonce, counter, signature, origin };
     const result =
       path === protocol.routes.ticket_read ? await stub.read(input) : await stub.ack(input);

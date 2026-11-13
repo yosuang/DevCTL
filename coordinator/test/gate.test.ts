@@ -1,7 +1,8 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { expect, it } from "vitest";
 import { encodeB64Url, encodeHex, sha256 } from "../src/bytes";
-import { admit, shardObjectName, sourceObjectName } from "../src/gate";
+import { protocol } from "../src/protocol";
+import { admit, shardObjectName, sourceObjectName, windowId } from "../src/gate";
 import {
   CIPHERTEXT,
   PASSPHRASE,
@@ -71,4 +72,40 @@ it("one grant cannot bind a second ticket", async () => {
   expect(created.error).toBe("unauthorized");
   expect((await dumpTicket(ticketName)).state).toBeNull();
   expect((await dumpTicket(ticketName)).alarm).toBeNull();
+});
+
+it("a refund from the previous window does not admit above the shard cap", async () => {
+  const cap = protocol.limits.shard_admits_per_window;
+  const previous = windowId(Date.now()) - 1;
+  const shard = env.GATE.getByName("shard:refund-window");
+  await runInDurableObject(shard, async (_instance, state) => {
+    state.storage.sql.exec("INSERT INTO counter (id, window, count) VALUES (1, ?, ?)", previous, cap);
+  });
+  expect(await shard.debit()).toBe(true);
+  expect(await shard.refund(previous)).toBe(true);
+  let admitted = 1;
+  for (let i = 0; i < cap; i++) {
+    if (await shard.debit()) admitted += 1;
+  }
+  expect(admitted).toBe(cap);
+  const count = await runInDurableObject(shard, async (_instance, state) => {
+    const rows = state.storage.sql
+      .exec<{ count: number; window: number }>("SELECT count, window FROM counter WHERE id = 1")
+      .toArray();
+    return { count: rows[0] ? Number(rows[0].count) : 0, window: rows[0] ? Number(rows[0].window) : 0 };
+  });
+  expect(count.count).toBe(cap);
+  expect(count.window).toBe(previous + 1);
+
+  const same = env.GATE.getByName("shard:refund-same");
+  const current = windowId(Date.now());
+  await runInDurableObject(same, async (_instance, state) => {
+    state.storage.sql.exec("INSERT INTO counter (id, window, count) VALUES (1, ?, 1)", current);
+  });
+  expect(await same.refund(current)).toBe(true);
+  const refunded = await runInDurableObject(same, async (_instance, state) => {
+    const rows = state.storage.sql.exec<{ count: number }>("SELECT count FROM counter WHERE id = 1").toArray();
+    return rows[0] ? Number(rows[0].count) : 0;
+  });
+  expect(refunded).toBe(0);
 });

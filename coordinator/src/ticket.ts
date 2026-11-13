@@ -160,8 +160,9 @@ export class TicketDO extends DurableObject<Env> {
       return { v: protocol.version, nonce };
     }
     if (input.purpose === "cancel") {
+      const existing = this.#nonceValue("cancel");
+      if (existing) return { v: protocol.version, nonce: existing };
       const nonce = encodeB64Url(randomBytes(protocol.nonce_bytes));
-      this.ctx.storage.sql.exec("DELETE FROM pending_nonce WHERE purpose = 'cancel'");
       this.ctx.storage.sql.exec("INSERT INTO pending_nonce (purpose, value) VALUES ('cancel', ?)", nonce);
       return { v: protocol.version, nonce };
     }
@@ -571,9 +572,25 @@ export class TicketDO extends DurableObject<Env> {
     if (row.state === "open" || (row.state === "bound" && row.seed_nonce)) {
       return { v: protocol.version, error: row.state === "open" ? "ticket_not_bound" : "unauthorized" };
     }
+    if (row.op_nonce) return { v: protocol.version, nonce: row.op_nonce };
     const next = encodeB64Url(randomBytes(protocol.nonce_bytes));
-    this.ctx.storage.sql.exec("UPDATE ticket SET op_nonce = ? WHERE id = 1", next);
-    return { v: protocol.version, nonce: next };
+    this.ctx.storage.sql.exec(
+      "UPDATE ticket SET op_nonce = ? WHERE id = 1 AND op_nonce IS NULL",
+      next,
+    );
+    const written = this.#load();
+    if (!written?.op_nonce) return { v: protocol.version, error: "unauthorized" };
+    return { v: protocol.version, nonce: written.op_nonce };
+  }
+
+  #nonceValue(purpose: string): string | null {
+    const rows = this.ctx.storage.sql
+      .exec<{ value: string }>(
+        "SELECT value FROM pending_nonce WHERE purpose = ? ORDER BY id LIMIT 1",
+        purpose,
+      )
+      .toArray();
+    return rows[0]?.value ?? null;
   }
 
   #expire(now: number): void {

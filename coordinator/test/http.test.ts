@@ -17,9 +17,11 @@ import {
   openTicket,
   post,
   receiver,
+  dumpSession,
   redeem,
   signedAck,
   signedRead,
+  signedRedeem,
 } from "./support";
 
 it("GET does not touch ticket state and does not echo the query", async () => {
@@ -104,7 +106,7 @@ it("signed HTTP read and ack do not trust the socket", async () => {
   const opened = await openTicket("httpt");
   const challenge = await post(protocol.routes.ticket_challenge, {
     v: 1,
-    ticket: opened.ticket,
+    ticket_hash: opened.name,
     purpose: "confirm",
   });
   const confirmed = await post(protocol.routes.ticket_confirm, {
@@ -133,7 +135,7 @@ it("signed HTTP read and ack do not trust the socket", async () => {
   const nonce = await redeem(opened, who);
   const wrongOrigin = await post(protocol.routes.ticket_read, {
     v: 1,
-    ticket: opened.ticket,
+    ticket_hash: opened.name,
     pubkey: who.b64,
     nonce,
     counter: 0,
@@ -151,7 +153,7 @@ it("signed HTTP read and ack do not trust the socket", async () => {
   expect((await dumpTicket(opened.name)).op_nonce).toBe(nonce);
   const read = await post(protocol.routes.ticket_read, {
     v: 1,
-    ticket: opened.ticket,
+    ticket_hash: opened.name,
     pubkey: who.b64,
     nonce,
     counter: 0,
@@ -164,7 +166,7 @@ it("signed HTTP read and ack do not trust the socket", async () => {
   const ackNonce = (await opened.stub.challenge({ purpose: "op" })).nonce ?? "";
   const ack = await post(protocol.routes.ticket_ack, {
     v: 1,
-    ticket: opened.ticket,
+    ticket_hash: opened.name,
     pubkey: who.b64,
     nonce: ackNonce,
     counter: 1,
@@ -182,6 +184,92 @@ it("signed HTTP read and ack do not trust the socket", async () => {
   const after = await dumpTicket(opened.name);
   expect(after.state).toBe("consumed");
   expect(after.envelope).toBeNull();
+});
+
+it("a receiver with only the hint hash can redeem, read, and ack", async () => {
+  const who = await receiver();
+  const session = await openSession("recv", who);
+  const opened = await openTicket("recvt");
+  const challenge = await post(protocol.routes.ticket_challenge, {
+    v: 1,
+    ticket_hash: opened.name,
+    purpose: "confirm",
+  });
+  const confirmed = await post(protocol.routes.ticket_confirm, {
+    v: 1,
+    ticket: opened.ticket,
+    session_capability: session.capability,
+    confirm: true,
+    nonce: challenge.json.nonce,
+    digest: await confirmDigest({
+      nonce: String(challenge.json.nonce),
+      sessionHash: session.name,
+      ticketHash: opened.name,
+      pubkey: who.raw,
+    }),
+  });
+  expect(confirmed.status).toBe(200);
+  expect(confirmed.json.state).toBe("bound");
+  const hint = await dumpSession(session.name);
+  const ticketHash = hint.hintHash ?? "";
+  const seed = hint.hintSeed ?? "";
+  expect(ticketHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(seed.length).toBeGreaterThan(0);
+  expect(hint.text).not.toContain(opened.ticket);
+  const redeemed = await post(protocol.routes.ticket_challenge, {
+    v: 1,
+    ticket_hash: ticketHash,
+    purpose: "op",
+    pubkey: who.b64,
+    signature: await signedRedeem(who, seed, ticketHash),
+  });
+  expect(redeemed.status).toBe(200);
+  const nonce = String(redeemed.json.nonce);
+  const read = await post(protocol.routes.ticket_read, {
+    v: 1,
+    ticket_hash: ticketHash,
+    pubkey: who.b64,
+    nonce,
+    counter: 0,
+    signature: await signedRead({ who, nonce, ticketHash, counter: 0 }),
+  });
+  expect(read.status).toBe(200);
+  expect(read.json.envelope).toBe(opened.envelope);
+  expect(read.text).not.toContain(opened.ticket);
+  const envelopeHash = (await dumpTicket(ticketHash)).envelope_sha256 ?? "";
+  const next = await post(protocol.routes.ticket_challenge, {
+    v: 1,
+    ticket_hash: ticketHash,
+    purpose: "op",
+  });
+  const ackNonce = String(next.json.nonce);
+  const ack = await post(protocol.routes.ticket_ack, {
+    v: 1,
+    ticket_hash: ticketHash,
+    pubkey: who.b64,
+    nonce: ackNonce,
+    counter: 1,
+    signature: await signedAck({
+      who,
+      nonce: ackNonce,
+      ticketHash,
+      counter: 1,
+      envelopeHash,
+    }),
+  });
+  expect(ack.status).toBe(200);
+  expect(ack.json).toEqual({ v: 1, state: "consumed" });
+  expect((await dumpTicket(ticketHash)).envelope).toBeNull();
+  const rejected = await post(protocol.routes.ticket_read, {
+    v: 1,
+    ticket: opened.ticket,
+    pubkey: who.b64,
+    nonce,
+    counter: 0,
+    signature: "example-signature-not-a-secret",
+  });
+  expect(rejected.json.error).toBe("unsupported_version");
+  expect((await dumpTicket(ticketHash)).state).toBe("consumed");
 });
 
 it("the fourth create from one source writes nothing", async () => {
