@@ -25,6 +25,7 @@ const (
 	partialFileName    = "copy.partial"
 	journalFileName    = "journal"
 	journalPartialName = "journal.partial"
+	journalNextName    = "journal.next"
 	sessionKeyName     = "key"
 	sessionCapName     = "capability"
 	sessionPhaseName   = "phase"
@@ -635,8 +636,13 @@ func saveJournal(dir string, record journal) error {
 	if err != nil {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}
+	// The partial is truncated and removed if its write fails. A keep has to
+	// be on the installed journal before that, or stop still sees a temporary copy.
+	if err := preserveKeep(dir, record, raw); err != nil {
+		return err
+	}
 	partial := filepath.Join(dir, journalPartialName)
-	if err := writeUnsynced(partial, raw); err != nil {
+	if err := writeJournalPartial(partial, raw); err != nil {
 		return err
 	}
 	if err := syncPath(partial); err != nil {
@@ -686,6 +692,49 @@ func marshalJournal(record journal) ([]byte, error) {
 // installJournalFile moves a synced journal partial into place.
 // A failed install leaves that partial on disk. Tests replace this.
 var installJournalFile = replaceFile
+
+// writeJournalPartial writes the unsynced journal partial. Tests replace this.
+var writeJournalPartial = writeUnsynced
+
+// preserveKeep installs a keep record before journal.partial is opened.
+// An expiry write that fails before that partial survives must still leave
+// the plaintext in place for proxy stop.
+func preserveKeep(dir string, record journal, raw []byte) error {
+	if keepCopy(record) {
+		return installKeepJournal(dir, raw)
+	}
+	kept, err := partialKeeps(dir)
+	if err != nil || !kept {
+		return err
+	}
+	body, err := os.ReadFile(filepath.Join(dir, journalPartialName))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return localCode("copy_incomplete", "copy could not be saved")
+	}
+	return installKeepJournal(dir, body)
+}
+
+func installKeepJournal(dir string, raw []byte) error {
+	next := filepath.Join(dir, journalNextName)
+	if err := writeUnsynced(next, raw); err != nil {
+		return err
+	}
+	if err := syncPath(next); err != nil {
+		_ = os.Remove(next)
+		return err
+	}
+	final := filepath.Join(dir, journalFileName)
+	if err := replaceFile(next, final); err != nil {
+		return localCode("copy_incomplete", "copy could not be saved")
+	}
+	if err := restrictFile(final); err != nil {
+		return err
+	}
+	return syncDir(dir)
+}
 
 func replaceFile(partial, final string) error {
 	if err := os.Rename(partial, final); err == nil {
