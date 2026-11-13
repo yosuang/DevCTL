@@ -448,15 +448,21 @@ type devctlProc struct {
 
 func startDevctl(ctx context.Context, t *testing.T, bin, configDir string, args ...string) *devctlProc {
 	t.Helper()
+	return runDevctlCmd(ctx, t, exec.Command(bin, args...), configDir)
+}
+
+func runDevctlCmd(ctx context.Context, t *testing.T, cmd *exec.Cmd, configDir string) *devctlProc {
+	t.Helper()
 	master, slave, err := openPTY()
 	if err != nil {
 		t.Fatal(err)
 	}
 	stdout := &lockedBuffer{}
 	stderr := &lockedBuffer{}
-	cmd := exec.Command(bin, args...)
 	cmd.Dir = configDir
-	cmd.Env = cleanEnv(configDir)
+	if cmd.Env == nil {
+		cmd.Env = cleanEnv(configDir)
+	}
 	cmd.Stdin = slave
 	cmd.Stdout = stdout
 	cmd.Stderr = io.MultiWriter(stderr, mustFile(t, filepath.Join(configDir, "stderr.txt")))

@@ -350,21 +350,26 @@ it("logs and error bodies omit example material", async () => {
   expect(logged).not.toContain("argon2id");
 });
 
-it("serves a static page with no pairing script", async () => {
+it("GET /p does not bind and the shell has no secret field", async () => {
   const opened = await openTicket("page");
   const before = await dumpTicket(opened.name);
   for (const word of protocol.browser_forbidden_identifiers) {
-    expect(pageSource.includes(word)).toBe(false);
+    expect(pageSource.includes(word), word).toBe(false);
   }
-  expect(pageSource).not.toContain("<script");
-  const response = await SELF.fetch(`${ORIGIN}/p`);
+  expect(pageSource).toContain('src="/page.js"');
+  expect(pageSource).not.toContain("<input");
+  expect(pageSource).not.toContain("passphrase");
+  expect(pageSource).not.toContain("decrypt");
+  const response = await SELF.fetch(`${ORIGIN}/p?ticket=${opened.ticket}`);
   expect(response.status).toBe(200);
   const html = await response.text();
-  expect(html).toContain("Static pairing shell");
+  expect(html).toContain("Receiver fingerprint");
+  expect(html).toContain(">Confirm<");
+  expect(html).not.toContain(opened.ticket);
+  expect(html).not.toContain("<input");
   for (const word of protocol.browser_forbidden_identifiers) {
-    expect(html.includes(word)).toBe(false);
+    expect(html.includes(word), word).toBe(false);
   }
-  expect(html).not.toContain("<script");
   expect(await dumpTicket(opened.name)).toEqual(before);
 });
 
