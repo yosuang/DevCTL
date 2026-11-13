@@ -148,6 +148,7 @@ func TestRenderURI(t *testing.T) {
 			name: "example",
 			uri:  exampleURI,
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				doc := assertSafeConfig(t, body, 1080)
 				item := proxyItem(t, doc)
 				if item["server"] != "192.0.2.1" || item["port"] != 443 || item["password"] != exampleAuth {
@@ -168,6 +169,7 @@ func TestRenderURI(t *testing.T) {
 			name: "hy2 and default port",
 			uri:  "hy2://example-auth-not-a-secret@192.0.2.1/",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["type"] != "hysteria2" || item["port"] != 443 {
 					t.Fatal("hy2")
@@ -178,6 +180,7 @@ func TestRenderURI(t *testing.T) {
 			name: "user password",
 			uri:  "hysteria2://user:pass@192.0.2.1:443/",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["password"] != "user:pass" {
 					t.Fatal("user password")
@@ -188,6 +191,7 @@ func TestRenderURI(t *testing.T) {
 			name: "percent encoding",
 			uri:  "hysteria2://user%3Aname:p%40ss@192.0.2.1/",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["password"] != "user:name:p@ss" {
 					t.Fatal("percent")
@@ -198,6 +202,7 @@ func TestRenderURI(t *testing.T) {
 			name: "password true stays a string",
 			uri:  "hysteria2://true@192.0.2.1:443/",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["password"] != "true" {
 					t.Fatalf("password %T", item["password"])
@@ -208,6 +213,7 @@ func TestRenderURI(t *testing.T) {
 			name: "fragment is not configuration",
 			uri:  exampleURI + "#display-name-only",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				if strings.Contains(string(body), "display-name-only") {
 					t.Fatal("fragment")
 				}
@@ -217,6 +223,7 @@ func TestRenderURI(t *testing.T) {
 			name: "insecure one",
 			uri:  "hysteria2://example-auth-not-a-secret@192.0.2.1/?insecure=1",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["skip-cert-verify"] != true {
 					t.Fatal("insecure")
@@ -227,6 +234,7 @@ func TestRenderURI(t *testing.T) {
 			name: "insecure zero is explicit",
 			uri:  "hysteria2://example-auth-not-a-secret@192.0.2.1/?insecure=0",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["skip-cert-verify"] != false {
 					t.Fatal("insecure zero")
@@ -237,6 +245,7 @@ func TestRenderURI(t *testing.T) {
 			name: "insecure absent",
 			uri:  "hysteria2://example-auth-not-a-secret@192.0.2.1/",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if _, ok := item["skip-cert-verify"]; ok {
 					t.Fatal("skip present")
@@ -247,6 +256,7 @@ func TestRenderURI(t *testing.T) {
 			name: "salamander",
 			uri:  "hysteria2://example-auth-not-a-secret@192.0.2.1/?obfs=salamander&obfs-password=pw",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["obfs"] != "salamander" || item["obfs-password"] != "pw" {
 					t.Fatal("obfs")
@@ -257,6 +267,7 @@ func TestRenderURI(t *testing.T) {
 			name: "hyphenated host",
 			uri:  "hysteria2://example-auth-not-a-secret@my-host.example:443/",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["server"] != "my-host.example" || item["port"] != 443 {
 					t.Fatal("host")
@@ -267,6 +278,7 @@ func TestRenderURI(t *testing.T) {
 			name: "ipv6",
 			uri:  "hysteria2://example-auth-not-a-secret@[2001:db8::1]/?sni=example.invalid",
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["server"] != "2001:db8::1" || item["port"] != 443 {
 					t.Fatal("ipv6")
@@ -277,6 +289,7 @@ func TestRenderURI(t *testing.T) {
 			name: "pin separators",
 			uri:  "hysteria2://example-auth-not-a-secret@192.0.2.1/?pinSHA256=" + colon,
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["fingerprint"] != pin {
 					t.Fatal("fingerprint")
@@ -290,6 +303,7 @@ func TestRenderURI(t *testing.T) {
 			name: "pin hyphens",
 			uri:  "hysteria2://example-auth-not-a-secret@192.0.2.1/?pinSHA256=" + hyphen,
 			check: func(t *testing.T, body []byte) {
+				t.Helper()
 				item := proxyItem(t, assertSafeConfig(t, body, 1080))
 				if item["fingerprint"] != pin || strings.Contains(item["fingerprint"].(string), "-") {
 					t.Fatal("hyphen pin")
