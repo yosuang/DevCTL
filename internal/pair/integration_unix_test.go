@@ -83,7 +83,7 @@ func testRejectReconnect(t *testing.T, origin string) {
 	if err := Issue(ctx, origin, issuePrompt, issuerDir); err != nil {
 		t.Fatalf("issue: %s", err.Error())
 	}
-	if issuePrompt.phrases != nil && len(issuePrompt.phrases) != 0 {
+	if len(issuePrompt.phrases) != 0 {
 		t.Fatal("issue did not read the passphrase")
 	}
 	ticket, issuerCap := readIssuer(t, issuerDir)
@@ -101,7 +101,7 @@ func testRejectReconnect(t *testing.T, origin string) {
 		cancel()
 		wg.Wait()
 	}()
-	sessionCap := waitSessionCapability(t, ctx, &shown)
+	sessionCap := waitSessionCapability(ctx, t, &shown)
 	rec, err := loadReceiver(receiverDir)
 	if err != nil || rec == nil {
 		t.Fatalf("session: %v", err)
@@ -122,7 +122,7 @@ func testRejectReconnect(t *testing.T, origin string) {
 	if treeContains(t, receiverDir, []byte(exampleURI)) || fileNamed(t, receiverDir, copyFileName) {
 		t.Fatal("wrong passphrase wrote a copy")
 	}
-	if state := ticketStatus(t, ctx, origin, ticket, issuerCap); state != "bound" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuerCap); state != "bound" {
 		t.Fatalf("state %s", state)
 	}
 
@@ -176,7 +176,7 @@ func testRejectReconnect(t *testing.T, origin string) {
 	if codeOf(err) != "ticket_bound" && codeOf(err) != "forbidden" {
 		t.Fatalf("second confirm: %v", err)
 	}
-	if state := ticketStatus(t, ctx, origin, ticket, issuerCap); state != "bound" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuerCap); state != "bound" {
 		t.Fatalf("state after reject %s", state)
 	}
 	assertLogClean(t, logPath, ticket)
@@ -188,23 +188,23 @@ func testDeliverCLI(t *testing.T, origin, bin string) {
 	defer cancel()
 	issuerDir := t.TempDir()
 	receiverDir := t.TempDir()
-	receive := startDevctl(t, ctx, bin, receiverDir, "--debug", "pair", "receive", "--coordinator", origin)
+	receive := startDevctl(ctx, t, bin, receiverDir, "--debug", "pair", "receive", "--coordinator", origin)
 	defer receive.stop()
-	page := receive.stdout.waitLine(t, ctx, "#sc=")
+	page := receive.stdout.waitLine(ctx, t, "#sc=")
 	sessionCap, err := decodeFragment(page)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	issue := startDevctl(t, ctx, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
+	issue := startDevctl(ctx, t, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
 	defer issue.stop()
-	issue.stderr.waitContains(t, ctx, "Hysteria2 URI:")
+	issue.stderr.waitContains(ctx, t, "Hysteria2 URI:")
 	issue.write(exampleURI)
-	issue.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	issue.stderr.waitContains(ctx, t, "Transfer passphrase (not this computer's login password):")
 	issue.write(examplePassphrase)
-	issue.stderr.waitContains(t, ctx, "Transfer passphrase again:")
+	issue.stderr.waitContains(ctx, t, "Transfer passphrase again:")
 	issue.write(examplePassphrase)
-	ticketLine := issue.stdout.waitLine(t, ctx, "dct1.")
+	ticketLine := issue.stdout.waitLine(ctx, t, "dct1.")
 	if issue.wait() != 0 {
 		t.Fatalf("issue exit, stderr %s", issue.stderr.String())
 	}
@@ -242,7 +242,7 @@ func testDeliverCLI(t *testing.T, origin, bin string) {
 	if err != nil || confirmed.State != "bound" {
 		t.Fatalf("confirm: %v %s", err, confirmed.State)
 	}
-	receive.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	receive.stderr.waitContains(ctx, t, "Transfer passphrase (not this computer's login password):")
 	receive.write(examplePassphrase)
 	if receive.wait() != 0 {
 		t.Fatalf("receive exit, stderr %s", receive.stderr.String())
@@ -252,7 +252,7 @@ func testDeliverCLI(t *testing.T, origin, bin string) {
 		t.Fatalf("copy %q err %v", got, err)
 	}
 	_, issuerCap := readIssuer(t, issuerDir)
-	if state := ticketStatus(t, ctx, origin, ticket, issuerCap); state != "consumed" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuerCap); state != "consumed" {
 		t.Fatalf("state %s", state)
 	}
 	for _, dir := range []string{issuerDir, receiverDir} {
@@ -446,7 +446,7 @@ type devctlProc struct {
 	done   chan error
 }
 
-func startDevctl(t *testing.T, ctx context.Context, bin, configDir string, args ...string) *devctlProc {
+func startDevctl(ctx context.Context, t *testing.T, bin, configDir string, args ...string) *devctlProc {
 	t.Helper()
 	master, slave, err := openPTY()
 	if err != nil {
@@ -589,7 +589,7 @@ func containsMaterial(body, ticket []byte) bool {
 	return false
 }
 
-func ticketStatus(t *testing.T, ctx context.Context, origin string, ticket, issuer []byte) string {
+func ticketStatus(ctx context.Context, t *testing.T, origin string, ticket, issuer []byte) string {
 	t.Helper()
 	client, err := dialCoordinator(origin)
 	if err != nil {
@@ -637,9 +637,9 @@ func readIssuer(t *testing.T, configDir string) ([]byte, []byte) {
 	return ticket, capability
 }
 
-func waitSessionCapability(t *testing.T, ctx context.Context, shown *lockedBuffer) []byte {
+func waitSessionCapability(ctx context.Context, t *testing.T, shown *lockedBuffer) []byte {
 	t.Helper()
-	line := shown.waitLine(t, ctx, "#sc=")
+	line := shown.waitLine(ctx, t, "#sc=")
 	raw, err := decodeFragment(line)
 	if err != nil {
 		t.Fatal(err)
@@ -680,7 +680,7 @@ func treeContains(t *testing.T, root string, needle []byte) bool {
 func fileNamed(t *testing.T, root, name string) bool {
 	t.Helper()
 	found := false
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
 		if err == nil && info != nil && info.Name() == name {
 			found = true
 		}
@@ -730,14 +730,14 @@ func (b *lockedBuffer) String() string {
 	return b.buf.String()
 }
 
-func (b *lockedBuffer) waitContains(t *testing.T, ctx context.Context, needle string) {
+func (b *lockedBuffer) waitContains(ctx context.Context, t *testing.T, needle string) {
 	t.Helper()
 	if err := b.wait(ctx, func(text string) bool { return strings.Contains(text, needle) }); err != nil {
 		t.Fatalf("timed out waiting for %q", needle)
 	}
 }
 
-func (b *lockedBuffer) waitLine(t *testing.T, ctx context.Context, prefix string) string {
+func (b *lockedBuffer) waitLine(ctx context.Context, t *testing.T, prefix string) string {
 	t.Helper()
 	var line string
 	err := b.wait(ctx, func(text string) bool {
