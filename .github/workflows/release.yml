@@ -44,7 +44,7 @@ jobs:
     if: contains(inputs.platforms, 'linux')
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -83,7 +83,7 @@ jobs:
     if: contains(inputs.platforms, 'windows')
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -154,7 +154,7 @@ jobs:
     if: contains(inputs.platforms, 'macos')
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -206,7 +206,7 @@ jobs:
     if: inputs.release
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Merge built artifacts
         uses: actions/download-artifact@v8
       - name: Prepare release assets
