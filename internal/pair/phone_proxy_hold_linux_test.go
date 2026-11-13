@@ -146,7 +146,7 @@ type ackHold struct {
 	stop     chan struct{}
 }
 
-func startHeldDevctl(t *testing.T, ctx context.Context, bin, configDir string, args ...string) (*ackHold, *devctlProc) {
+func startHeldDevctl(ctx context.Context, t *testing.T, bin, configDir string, args ...string) (*ackHold, *devctlProc) {
 	t.Helper()
 	if nativeAuditArch() == 0 || unsafe.Sizeof(uintptr(0)) != 8 {
 		t.Fatal("seccomp hold is unavailable")
@@ -187,7 +187,7 @@ func startHeldDevctl(t *testing.T, ctx context.Context, bin, configDir string, a
 		"DEVCTL_HOLD_SPEC="+specPath,
 	)
 	cmd.ExtraFiles = []*os.File{child}
-	proc := runDevctlCmd(t, ctx, cmd, configDir)
+	proc := runDevctlCmd(ctx, t, cmd, configDir)
 	notify, err := readNotify(int(parent.Fd()))
 	parent.Close()
 	if err != nil {

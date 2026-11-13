@@ -160,22 +160,22 @@ func takeover(t *testing.T, origin, bin, saveDir string) string {
 	if saveDir != "" {
 		args = append(args, "--save-dir", saveDir)
 	}
-	receive := startDevctl(t, ctx, bin, receiverDir, args...)
+	receive := startDevctl(ctx, t, bin, receiverDir, args...)
 	defer receive.stop()
-	page := receive.stdout.waitLine(t, ctx, "#sc=")
+	page := receive.stdout.waitLine(ctx, t, "#sc=")
 	sessionCap, err := decodeFragment(page)
 	if err != nil {
 		t.Fatal(err)
 	}
-	issue := startDevctl(t, ctx, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
+	issue := startDevctl(ctx, t, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
 	defer issue.stop()
-	issue.stderr.waitContains(t, ctx, "Hysteria2 URI:")
+	issue.stderr.waitContains(ctx, t, "Hysteria2 URI:")
 	issue.write(exampleURI)
-	issue.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	issue.stderr.waitContains(ctx, t, "Transfer passphrase (not this computer's login password):")
 	issue.write(examplePassphrase)
-	issue.stderr.waitContains(t, ctx, "Transfer passphrase again:")
+	issue.stderr.waitContains(ctx, t, "Transfer passphrase again:")
 	issue.write(examplePassphrase)
-	ticketLine := issue.stdout.waitLine(t, ctx, "dct1.")
+	ticketLine := issue.stdout.waitLine(ctx, t, "dct1.")
 	if issue.wait() != 0 {
 		t.Fatalf("issue exit, stderr %s", issue.stderr.String())
 	}
@@ -184,8 +184,8 @@ func takeover(t *testing.T, origin, bin, saveDir string) string {
 		t.Fatal("ticket text")
 	}
 	_, issuer := readIssuer(t, issuerDir)
-	confirmFromPhonePage(t, ctx, origin, sessionCap, ticket, issuer)
-	receive.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	confirmFromPhonePage(ctx, t, origin, sessionCap, ticket, issuer)
+	receive.stderr.waitContains(ctx, t, "Transfer passphrase (not this computer's login password):")
 	receive.write(examplePassphrase)
 	if receive.wait() != 0 {
 		t.Fatalf("receive exit, stderr %s", receive.stderr.String())
@@ -200,22 +200,22 @@ func cancelDuringReceive(t *testing.T, origin, bin string) (string, []byte) {
 	issuerDir := t.TempDir()
 	receiverDir := t.TempDir()
 	t.Cleanup(func() { stopProxy(bin, receiverDir) })
-	hold, receive := startHeldDevctl(t, ctx, bin, receiverDir, "--debug", "pair", "receive", "--coordinator", origin)
+	hold, receive := startHeldDevctl(ctx, t, bin, receiverDir, "--debug", "pair", "receive", "--coordinator", origin)
 	defer receive.stop()
-	page := receive.stdout.waitLine(t, ctx, "#sc=")
+	page := receive.stdout.waitLine(ctx, t, "#sc=")
 	sessionCap, err := decodeFragment(page)
 	if err != nil {
 		t.Fatal(err)
 	}
-	issue := startDevctl(t, ctx, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
+	issue := startDevctl(ctx, t, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
 	defer issue.stop()
-	issue.stderr.waitContains(t, ctx, "Hysteria2 URI:")
+	issue.stderr.waitContains(ctx, t, "Hysteria2 URI:")
 	issue.write(exampleURI)
-	issue.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	issue.stderr.waitContains(ctx, t, "Transfer passphrase (not this computer's login password):")
 	issue.write(examplePassphrase)
-	issue.stderr.waitContains(t, ctx, "Transfer passphrase again:")
+	issue.stderr.waitContains(ctx, t, "Transfer passphrase again:")
 	issue.write(examplePassphrase)
-	ticketLine := issue.stdout.waitLine(t, ctx, "dct1.")
+	ticketLine := issue.stdout.waitLine(ctx, t, "dct1.")
 	if issue.wait() != 0 {
 		t.Fatalf("issue exit, stderr %s", issue.stderr.String())
 	}
@@ -224,8 +224,8 @@ func cancelDuringReceive(t *testing.T, origin, bin string) (string, []byte) {
 		t.Fatal("ticket text")
 	}
 	_, issuer := readIssuer(t, issuerDir)
-	confirmFromPhonePage(t, ctx, origin, sessionCap, ticket, issuer)
-	receive.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	confirmFromPhonePage(ctx, t, origin, sessionCap, ticket, issuer)
+	receive.stderr.waitContains(ctx, t, "Transfer passphrase (not this computer's login password):")
 	receive.write(examplePassphrase)
 	hold.wait(t, receive)
 	if hold.kind != "challenge" {
@@ -244,11 +244,11 @@ func cancelDuringReceive(t *testing.T, origin, bin string) (string, []byte) {
 	if record.Phase != phaseCopyComplete || record.Observed != "" || record.Saved {
 		t.Fatalf("journal before cancel %+v", record)
 	}
-	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "bound" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuer); state != "bound" {
 		t.Fatalf("state before cancel %s", state)
 	}
-	cancelBody := cancelTicket(t, ctx, origin, ticket, issuer)
-	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "cancelled" {
+	cancelBody := cancelTicket(ctx, t, origin, ticket, issuer)
+	if state := ticketStatus(ctx, t, origin, ticket, issuer); state != "cancelled" {
 		t.Fatalf("state after cancel %s body %s", state, bytes.TrimSpace(cancelBody))
 	}
 	hold.release()
@@ -258,13 +258,13 @@ func cancelDuringReceive(t *testing.T, origin, bin string) (string, []byte) {
 	if !strings.Contains(receive.stderr.String(), "cancelled:") {
 		t.Fatalf("stderr %s", receive.stderr.String())
 	}
-	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "cancelled" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuer); state != "cancelled" {
 		t.Fatalf("state after receive %s", state)
 	}
 	return receiverDir, cancelBody
 }
 
-func cancelTicket(t *testing.T, ctx context.Context, origin string, ticket, issuer []byte) []byte {
+func cancelTicket(ctx context.Context, t *testing.T, origin string, ticket, issuer []byte) []byte {
 	t.Helper()
 	if err := loadWire(); err != nil {
 		t.Fatal(err)
@@ -279,7 +279,7 @@ func cancelTicket(t *testing.T, ctx context.Context, origin string, ticket, issu
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(ticket)
-	status, chalBody := postRaw(t, ctx, origin, routes.Routes.Challenge, struct {
+	status, chalBody := postRaw(ctx, t, origin, routes.Routes.Challenge, struct {
 		V          int    `json:"v"`
 		TicketHash string `json:"ticket_hash"`
 		Purpose    string `json:"purpose"`
@@ -301,7 +301,7 @@ func cancelTicket(t *testing.T, ctx context.Context, origin string, ticket, issu
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, body := postRaw(t, ctx, origin, routes.Routes.Cancel, struct {
+	status, body := postRaw(ctx, t, origin, routes.Routes.Cancel, struct {
 		V      int    `json:"v"`
 		Ticket string `json:"ticket"`
 		Issuer string `json:"issuer_capability"`
@@ -321,7 +321,7 @@ func cancelTicket(t *testing.T, ctx context.Context, origin string, ticket, issu
 	return body
 }
 
-func postRaw(t *testing.T, ctx context.Context, origin, path string, payload any) (int, []byte) {
+func postRaw(ctx context.Context, t *testing.T, origin, path string, payload any) (int, []byte) {
 	t.Helper()
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -362,7 +362,7 @@ func decodeJournal(t *testing.T, body []byte) journal {
 	return record
 }
 
-func confirmFromPhonePage(t *testing.T, ctx context.Context, origin string, sessionCap, ticket, issuer []byte) {
+func confirmFromPhonePage(ctx context.Context, t *testing.T, origin string, sessionCap, ticket, issuer []byte) {
 	t.Helper()
 	var routes struct {
 		Routes struct {
@@ -409,7 +409,7 @@ func confirmFromPhonePage(t *testing.T, ctx context.Context, origin string, sess
 	if err != nil || preview.State != "open" || preview.Envelope != "" {
 		t.Fatalf("ticket preview %v state %s", err, preview.State)
 	}
-	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "open" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuer); state != "open" {
 		t.Fatalf("preview bound the ticket: %s", state)
 	}
 	sum := sha256.Sum256(ticket)
@@ -457,7 +457,7 @@ func confirmFromPhonePage(t *testing.T, ctx context.Context, origin string, sess
 	if err != nil || confirmed.State != "bound" || confirmed.Fingerprint != session.Fingerprint || confirmed.Envelope != "" {
 		t.Fatalf("confirm %v state %s", err, confirmed.State)
 	}
-	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "bound" {
+	if state := ticketStatus(ctx, t, origin, ticket, issuer); state != "bound" {
 		t.Fatalf("state %s", state)
 	}
 }
@@ -466,8 +466,8 @@ func runProxy(t *testing.T, bin, configDir, core string) (string, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
-	startOut := runDevctl(t, ctx, bin, configDir, "proxy", "start", "--core", core)
-	stopOut := runDevctl(t, ctx, bin, configDir, "proxy", "stop")
+	startOut := runDevctl(ctx, t, bin, configDir, "proxy", "start", "--core", core)
+	stopOut := runDevctl(ctx, t, bin, configDir, "proxy", "stop")
 	assertListeningOnly(t, startOut, stopOut)
 	return startOut, stopOut
 }
@@ -482,7 +482,7 @@ func assertListeningOnly(t *testing.T, startOut, stopOut string) {
 	}
 }
 
-func runDevctl(t *testing.T, ctx context.Context, bin, configDir string, args ...string) string {
+func runDevctl(ctx context.Context, t *testing.T, bin, configDir string, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = cleanEnv(configDir)

@@ -96,7 +96,7 @@ func observeSession(t *testing.T, dir, core, work string, upstreamPort int, pin 
 	return sessionObs{pid: pid, port: port, addr: net.JoinHostPort(loopbackHost, strconv.Itoa(port))}
 }
 
-func stopOwned(t *testing.T, dir, copyDir, uri string, journal []byte, pid int, addr string) {
+func stopOwned(t *testing.T, dir, copyDir, _ string, journal []byte, pid int, addr string) {
 	t.Helper()
 	out, err := callStop(t, dir, "")
 	if err != nil || out != "stopped\n"+credentialNotice {
