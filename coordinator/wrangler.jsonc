@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "devctl-coordinator",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-13",
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/v1/*"]
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "TICKET", "class_name": "TicketDO" },
+      { "name": "SESSION", "class_name": "SessionDO" },
+      { "name": "GATE", "class_name": "CreateGate" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["TicketDO", "SessionDO", "CreateGate"]
+    }
+  ]
+}
