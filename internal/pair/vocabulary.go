@@ -1,4 +1,4 @@
-// Package pair seals and opens the DevCTL pairing envelope.
+// Package pair seals the pairing envelope and stores a taken-over copy on this computer.
 // The wire vocabulary is the embedded protocol/v1.json file.
 package pair
 
@@ -28,15 +28,19 @@ const protocolVersion = 1
 var vocabularyJSON []byte
 
 type vocabularyFile struct {
-	Version int `json:"version"`
-	Errors  struct {
+	Version        int      `json:"version"`
+	States         []string `json:"states"`
+	TerminalStates []string `json:"terminal_states"`
+	Errors         struct {
 		Server []string `json:"server"`
 		Local  []string `json:"local"`
 	} `json:"errors"`
 	Limits struct {
 		EnvelopeMaxBytes int `json:"envelope_max_bytes"`
 	} `json:"limits"`
-	Envelope envelopeParams `json:"envelope"`
+	URISchemes              []string       `json:"uri_schemes"`
+	PassphraseMinCodepoints int            `json:"passphrase_min_codepoints"`
+	Envelope                envelopeParams `json:"envelope"`
 }
 
 type envelopeParams struct {
@@ -178,6 +182,25 @@ func loadVocabulary(raw []byte) (vocabularyFile, *base64.Encoding, aadLayout, er
 	layout, err := compileAAD(e)
 	if err != nil {
 		return vocabularyFile{}, nil, aadLayout{}, err
+	}
+	if file.PassphraseMinCodepoints < 1 {
+		return vocabularyFile{}, nil, aadLayout{}, errors.New("v1.json passphrase minimum is empty")
+	}
+	if len(file.URISchemes) == 0 {
+		return vocabularyFile{}, nil, aadLayout{}, errors.New("v1.json uri schemes are empty")
+	}
+	for _, scheme := range file.URISchemes {
+		if scheme == "" || strings.ContainsAny(scheme, ":/?#") {
+			return vocabularyFile{}, nil, aadLayout{}, errors.New("v1.json uri scheme is invalid")
+		}
+	}
+	for _, state := range []string{"consumed", "expired", "cancelled"} {
+		if err := requireCode(file.States, state); err != nil {
+			return vocabularyFile{}, nil, aadLayout{}, err
+		}
+		if err := requireCode(file.TerminalStates, state); err != nil {
+			return vocabularyFile{}, nil, aadLayout{}, err
+		}
 	}
 	return file, enc, layout, nil
 }
