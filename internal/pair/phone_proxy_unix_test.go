@@ -28,7 +28,7 @@ const proxyStopped = "stopped\nStopping does not revoke the proxy credentials. T
 func TestPhoneConfirmProxyLifecycle(t *testing.T) {
 	// #given a loopback coordinator and the phone confirm page
 	// #when issue, the page confirm HTTP path, receive, and proxy start/stop run
-	// #then default stop deletes the ticket copy, and an explicit save or a post-takeover expired or cancelled journal keeps it
+	// #then default stop deletes the ticket copy, and an explicit save or a post-takeover expired journal keeps it
 	// The confirm path is the page's preview, challenge, and confirm requests. This test does not open a camera.
 	// proxy start may print listening. That line is not ready, and this test does not probe through the proxy.
 	root := moduleRoot(t)
@@ -91,15 +91,39 @@ func TestPhoneConfirmProxyLifecycle(t *testing.T) {
 }
 
 func TestPhoneConfirmCancelledKeepsCopy(t *testing.T) {
-	// #given a journal that records cancellation after takeover
-	// #when issue, the phone confirm HTTP path, receive, proxy start, and proxy stop run
-	// #then pair/ticket-<hash>/copy stays and is not marked saved
+	// #given a loopback coordinator and a local copy that is already complete
+	// #when the coordinator cancels that ticket before the consumed acknowledgment
+	// #then proxy stop keeps pair/ticket-<hash>/copy from the server outcome
+	// Receive must not exit 0 and this test must not write the journal afterward.
 	// This coordinator admits three tickets, so cancellation uses its own loopback instance.
 	root := moduleRoot(t)
 	bin := buildDevctl(t, root)
 	origin := startWrangler(t, root)
 	core := lifecycleCore(t, root)
-	keepObservedCopy(t, origin, bin, core, "cancelled")
+	dir, cancelBody := cancelDuringReceive(t, origin, bin)
+	hash := oneTicketHash(t, dir)
+	copyPath := ticketCopyPath(dir, hash)
+	journalPath := filepath.Join(filepath.Dir(copyPath), journalFileName)
+	journal := readFile(t, journalPath)
+	record := decodeJournal(t, journal)
+	if record.Phase != phaseCopyComplete || record.Observed != "cancelled" || record.Saved {
+		t.Fatalf("journal %s", journal)
+	}
+	if bytes.Contains(journal, []byte(`"phase":"delivered"`)) || bytes.Contains(journal, []byte(`"saved"`)) {
+		t.Fatalf("journal %s", journal)
+	}
+	if string(readFile(t, copyPath)) != exampleURI {
+		t.Fatal("copy")
+	}
+	t.Logf("coordinator cancel response %s", bytes.TrimSpace(cancelBody))
+	startOut, stopOut := runProxy(t, bin, dir, core)
+	if string(readFile(t, copyPath)) != exampleURI {
+		t.Fatal("copy was deleted")
+	}
+	if !bytes.Equal(readFile(t, journalPath), journal) {
+		t.Fatal("journal")
+	}
+	assertListeningOnly(t, startOut, stopOut)
 }
 
 func keepObservedCopy(t *testing.T, origin, bin, core, observed string) {
@@ -167,6 +191,175 @@ func takeover(t *testing.T, origin, bin, saveDir string) string {
 		t.Fatalf("receive exit, stderr %s", receive.stderr.String())
 	}
 	return receiverDir
+}
+
+func cancelDuringReceive(t *testing.T, origin, bin string) (string, []byte) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	issuerDir := t.TempDir()
+	receiverDir := t.TempDir()
+	t.Cleanup(func() { stopProxy(bin, receiverDir) })
+	hold, receive := startHeldDevctl(t, ctx, bin, receiverDir, "--debug", "pair", "receive", "--coordinator", origin)
+	defer receive.stop()
+	page := receive.stdout.waitLine(t, ctx, "#sc=")
+	sessionCap, err := decodeFragment(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue := startDevctl(t, ctx, bin, issuerDir, "--debug", "pair", "issue", "--coordinator", origin)
+	defer issue.stop()
+	issue.stderr.waitContains(t, ctx, "Hysteria2 URI:")
+	issue.write(exampleURI)
+	issue.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	issue.write(examplePassphrase)
+	issue.stderr.waitContains(t, ctx, "Transfer passphrase again:")
+	issue.write(examplePassphrase)
+	ticketLine := issue.stdout.waitLine(t, ctx, "dct1.")
+	if issue.wait() != 0 {
+		t.Fatalf("issue exit, stderr %s", issue.stderr.String())
+	}
+	ticket, err := b64url.DecodeString(strings.TrimPrefix(ticketLine, "dct1."))
+	if err != nil || len(ticket) != 32 {
+		t.Fatal("ticket text")
+	}
+	_, issuer := readIssuer(t, issuerDir)
+	confirmFromPhonePage(t, ctx, origin, sessionCap, ticket, issuer)
+	receive.stderr.waitContains(t, ctx, "Transfer passphrase (not this computer's login password):")
+	receive.write(examplePassphrase)
+	hold.wait(t, receive)
+	if hold.kind != "challenge" {
+		t.Fatalf("held %s, want the op challenge before the acknowledgment", hold.kind)
+	}
+	hash := oneTicketHash(t, receiverDir)
+	sum := sha256.Sum256(ticket)
+	if hexEncode(sum[:]) != hash {
+		t.Fatal("ticket hash")
+	}
+	copyPath := ticketCopyPath(receiverDir, hash)
+	if string(readFile(t, copyPath)) != exampleURI {
+		t.Fatal("copy was not complete")
+	}
+	record := decodeJournal(t, readFile(t, filepath.Join(filepath.Dir(copyPath), journalFileName)))
+	if record.Phase != phaseCopyComplete || record.Observed != "" || record.Saved {
+		t.Fatalf("journal before cancel %+v", record)
+	}
+	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "bound" {
+		t.Fatalf("state before cancel %s", state)
+	}
+	cancelBody := cancelTicket(t, ctx, origin, ticket, issuer)
+	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "cancelled" {
+		t.Fatalf("state after cancel %s body %s", state, bytes.TrimSpace(cancelBody))
+	}
+	hold.release()
+	if code := receive.wait(); code != 1 {
+		t.Fatalf("receive exit %d, stderr %s", code, receive.stderr.String())
+	}
+	if !strings.Contains(receive.stderr.String(), "cancelled:") {
+		t.Fatalf("stderr %s", receive.stderr.String())
+	}
+	if state := ticketStatus(t, ctx, origin, ticket, issuer); state != "cancelled" {
+		t.Fatalf("state after receive %s", state)
+	}
+	return receiverDir, cancelBody
+}
+
+func cancelTicket(t *testing.T, ctx context.Context, origin string, ticket, issuer []byte) []byte {
+	t.Helper()
+	if err := loadWire(); err != nil {
+		t.Fatal(err)
+	}
+	var routes struct {
+		Routes struct {
+			Challenge string `json:"ticket_challenge"`
+			Cancel    string `json:"ticket_cancel"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(vocabularyJSON, &routes); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(ticket)
+	status, chalBody := postRaw(t, ctx, origin, routes.Routes.Challenge, struct {
+		V          int    `json:"v"`
+		TicketHash string `json:"ticket_hash"`
+		Purpose    string `json:"purpose"`
+	}{V: protocolVersion, TicketHash: hexEncode(sum[:]), Purpose: "cancel"})
+	var challenged resultBody
+	if err := json.Unmarshal(chalBody, &challenged); err != nil || status != http.StatusOK || challenged.Error != "" || challenged.Nonce == "" {
+		t.Fatalf("cancel challenge %d %s", status, chalBody)
+	}
+	nonce, err := decodeFixed(challenged.Nonce, wireSpec.NonceBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuerHash := sha256.Sum256(issuer)
+	digest, err := digestBytes("cancel", signParts{
+		nonce:      nonce,
+		ticketHash: sum[:],
+		issuerHash: issuerHash[:],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body := postRaw(t, ctx, origin, routes.Routes.Cancel, struct {
+		V      int    `json:"v"`
+		Ticket string `json:"ticket"`
+		Issuer string `json:"issuer_capability"`
+		Nonce  string `json:"nonce"`
+		Digest string `json:"digest"`
+	}{
+		V:      protocolVersion,
+		Ticket: b64url.EncodeToString(ticket),
+		Issuer: b64url.EncodeToString(issuer),
+		Nonce:  challenged.Nonce,
+		Digest: b64url.EncodeToString(digest),
+	})
+	var result resultBody
+	if err := json.Unmarshal(body, &result); err != nil || status != http.StatusOK || result.Error != "" || result.State != "cancelled" {
+		t.Fatalf("cancel %d %s", status, body)
+	}
+	return body
+}
+
+func postRaw(t *testing.T, ctx context.Context, origin, path string, payload any) (int, []byte) {
+	t.Helper()
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(payload); err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+path, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{
+		Timeout: 20 * time.Second,
+		Transport: &http.Transport{
+			Proxy: func(*http.Request) (*url.URL, error) { return nil, nil },
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := readLimited(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode, body
+}
+
+func decodeJournal(t *testing.T, body []byte) journal {
+	t.Helper()
+	var record journal
+	if err := json.Unmarshal(body, &record); err != nil {
+		t.Fatal(err)
+	}
+	return record
 }
 
 func confirmFromPhonePage(t *testing.T, ctx context.Context, origin string, sessionCap, ticket, issuer []byte) {
