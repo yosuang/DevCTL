@@ -18,6 +18,10 @@ func restrictFile(path string) error {
 	return nil
 }
 
+func openForSync(path string) (*os.File, error) {
+	return os.Open(path)
+}
+
 func syncDir(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

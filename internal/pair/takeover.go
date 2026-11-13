@@ -494,8 +494,11 @@ func replaceFile(partial, final string) error {
 	return os.Rename(partial, final)
 }
 
+// syncPath flushes path before a copy can become copy_complete.
+// openForSync returns a handle that can flush. A failed open or flush
+// returns copy_incomplete and does not promote the partial file.
 func syncPath(path string) error {
-	f, err := os.Open(path)
+	f, err := openForSync(path)
 	if err != nil {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}

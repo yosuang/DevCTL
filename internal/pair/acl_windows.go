@@ -66,6 +66,12 @@ func restrictFile(path string) error {
 	return restrictToCurrentUser(path)
 }
 
+// openForSync opens path with GENERIC_READ|GENERIC_WRITE.
+// os.Open is GENERIC_READ, and FlushFileBuffers rejects that handle.
+func openForSync(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR, 0o600)
+}
+
 func syncDir(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
