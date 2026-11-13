@@ -39,7 +39,7 @@ func NewCmdRoot() (*cobra.Command, error) {
 	cmd.SetHelpCommandGroupID("hidden")
 	cmd.SetCompletionCommandGroupID("hidden")
 	cmd.AddGroup(&cobra.Group{ID: "pair", Title: "Pairing:"})
-	cmd.AddCommand(newPairCmd())
+	cmd.AddCommand(newPairCmd(), newProxyCmd())
 
 	cfg.AddFlags(cmd.PersistentFlags())
 

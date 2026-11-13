@@ -26,16 +26,18 @@ func newPairCmd() *cobra.Command {
 
 func newReceiveCmd() *cobra.Command {
 	var coordinator string
+	var saveDir string
 	cmd := &cobra.Command{
 		Use:          "receive",
 		Short:        "Receive a paired proxy URI",
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return pair.Receive(cmd.Context(), coordinator, pair.TerminalPrompter(), cfg.ConfigDir, "")
+			return pair.Receive(cmd.Context(), coordinator, pair.TerminalPrompter(), cfg.ConfigDir, saveDir)
 		},
 	}
 	cmd.Flags().StringVar(&coordinator, "coordinator", "", "coordinator origin (required)")
+	cmd.Flags().StringVar(&saveDir, "save-dir", "", "directory for a saved copy")
 	_ = cmd.MarkFlagRequired("coordinator")
 	return cmd
 }

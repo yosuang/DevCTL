@@ -25,6 +25,7 @@ const (
 	partialFileName    = "copy.partial"
 	journalFileName    = "journal"
 	journalPartialName = "journal.partial"
+	journalNextName    = "journal.next"
 	sessionKeyName     = "key"
 	sessionCapName     = "capability"
 	sessionPhaseName   = "phase"
@@ -39,6 +40,9 @@ type journal struct {
 	// Observed is set when a complete copy outlives an expired or cancelled server ticket.
 	// The phase stays copy_complete. Delivered is reserved for an observed consumed ACK.
 	Observed string `json:"observed,omitempty"`
+	// Saved is set only when the user passes a save directory.
+	// The default copy is temporary until proxy stop deletes it.
+	Saved bool `json:"saved,omitempty"`
 }
 
 type ticketMatch struct {
@@ -99,6 +103,10 @@ func receiveCopy(configDir, saveDir string, prompt Prompter, ticketHash, envelop
 		}
 		if err := ensureSave(saveDir, dir, ticketHash); err != nil {
 			return err
+		}
+		record, ok = copyReady(dir, ticketHash)
+		if !ok {
+			return localCode("copy_incomplete", "copy does not match")
 		}
 		if record.Phase == phaseDelivered {
 			return nil
@@ -188,16 +196,19 @@ func observeAck(dir string, record journal, ack func([]byte) (string, error)) er
 	if state != "expired" && state != "cancelled" {
 		return localCode("ack_pending", "acknowledgment was not observed")
 	}
-	// The local file stays. This status is the server outcome, and it is not delivered.
+	// The local file stays. This status is the server outcome only after the
+	// journal records it. A failed write is not that outcome, and it is not delivered.
 	record.Phase = phaseCopyComplete
 	record.Observed = state
-	_ = saveJournal(dir, record)
+	if err := saveJournal(dir, record); err != nil {
+		return err
+	}
 	got, ok := copyReady(dir, ticketHash)
-	if !ok || got.Phase != phaseCopyComplete {
-		return serverCode(state, "the server copy is gone")
+	if !ok || got.Phase != phaseCopyComplete || got.Observed != state {
+		return localCode("copy_incomplete", "copy does not match")
 	}
 	if _, err := os.Stat(filepath.Join(dir, copyFileName)); err != nil {
-		return serverCode(state, "the server copy is gone")
+		return localCode("copy_incomplete", "copy does not match")
 	}
 	return serverCode(state, "the server copy is gone")
 }
@@ -301,7 +312,204 @@ func ensureSave(saveDir, ticketDir string, ticketHash []byte) error {
 	if err != nil {
 		return localCode("copy_incomplete", "copy does not match")
 	}
-	return writeSecretFile(filepath.Join(saveDir, "ticket-"+hex.EncodeToString(ticketHash)), body)
+	if err := writeSecretFile(filepath.Join(saveDir, "ticket-"+hex.EncodeToString(ticketHash)), body); err != nil {
+		return err
+	}
+	return markSaved(ticketDir, ticketHash)
+}
+
+// markSaved records the explicit persistence opt-in on the ticket journal.
+func markSaved(ticketDir string, ticketHash []byte) error {
+	record, ok := copyReady(ticketDir, ticketHash)
+	if !ok {
+		return localCode("copy_incomplete", "copy does not match")
+	}
+	if record.Saved {
+		return nil
+	}
+	record.Saved = true
+	return saveJournal(ticketDir, record)
+}
+
+// ReleaseTemporary deletes the takeover plaintext for the selected ticket.
+// The file stays when the user explicitly saved it, or when the server
+// expired or cancelled after the local copy was complete.
+// prefix is a hex prefix of the ticket hash. A 64-character hash selects
+// that ticket even when other tickets exist. A shorter prefix deletes the
+// one temporary copy it matches. More than one temporary copy is
+// ticket_ambiguous and nothing is deleted. A missing ticket is not an error.
+func ReleaseTemporary(configDir, prefix string) error {
+	if configDir == "" {
+		return localCode("copy_incomplete", "no complete copy is available")
+	}
+	norm, err := normalizePrefix(prefix)
+	if err != nil {
+		return err
+	}
+	if len(norm) == sha256.Size*2 {
+		return releaseByHash(configDir, norm)
+	}
+	hashes, err := ticketHashes(configDir, norm)
+	if err != nil {
+		return err
+	}
+	var temporary []string
+	for _, hashHex := range hashes {
+		kept, err := copyKept(configDir, hashHex)
+		if err != nil {
+			return err
+		}
+		if !kept {
+			temporary = append(temporary, hashHex)
+		}
+	}
+	if len(temporary) > 1 {
+		return localCode("ticket_ambiguous", "more than one ticket matches")
+	}
+	if len(temporary) == 0 {
+		return nil
+	}
+	return releaseByHash(configDir, temporary[0])
+}
+
+func copyKept(configDir, hashHex string) (bool, error) {
+	dir := filepath.Join(configDir, pairFolderName, "ticket-"+hashHex)
+	return plaintextKept(dir)
+}
+
+// plaintextKept reports whether stop must leave the takeover plaintext in place.
+// A missing journal is not proof that the copy is temporary: installing an
+// expiry record can remove the old journal before the new one is in place.
+// A synced journal.partial or journal.next from that failed install still keeps the copy.
+func plaintextKept(dir string) (bool, error) {
+	record, err := readJournal(filepath.Join(dir, journalFileName))
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return false, localCode("copy_incomplete", "copy does not match")
+		}
+		return true, nil
+	}
+	if keepCopy(record) {
+		return true, nil
+	}
+	kept, err := partialKeeps(dir)
+	if err != nil || kept {
+		return kept, err
+	}
+	return sideKeeps(dir, journalNextName)
+}
+
+func partialKeeps(dir string) (bool, error) {
+	return sideKeeps(dir, journalPartialName)
+}
+
+func sideKeeps(dir, name string) (bool, error) {
+	record, err := readJournal(filepath.Join(dir, name))
+	if err != nil || !keepCopy(record) {
+		return false, nil
+	}
+	if record.TicketHash != strings.TrimPrefix(filepath.Base(dir), "ticket-") {
+		return false, nil
+	}
+	body, err := os.ReadFile(filepath.Join(dir, copyFileName))
+	if err != nil {
+		return false, nil
+	}
+	sum := sha256.Sum256(body)
+	if subtle.ConstantTimeCompare(sum[:], decodeHash(record.CopyHash)) != 1 {
+		return false, nil
+	}
+	return true, nil
+}
+
+func releaseByHash(configDir, hashHex string) error {
+	if len(hashHex) != sha256.Size*2 || !isHexString(hashHex) {
+		return localCode("copy_incomplete", "no complete copy is available")
+	}
+	dir := filepath.Join(configDir, pairFolderName, "ticket-"+hashHex)
+	info, err := os.Stat(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return localCode("copy_incomplete", "no complete copy is available")
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	kept, err := plaintextKept(dir)
+	if err != nil {
+		return err
+	}
+	if kept {
+		return nil
+	}
+	return removePlaintext(dir)
+}
+
+func keepCopy(record journal) bool {
+	if record.Saved {
+		return true
+	}
+	return record.Observed == "expired" || record.Observed == "cancelled"
+}
+
+func hasPlaintext(dir string) bool {
+	for _, name := range []string{copyFileName, partialFileName} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && info.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
+}
+
+func removePlaintext(dir string) error {
+	removed := false
+	for _, name := range []string{copyFileName, partialFileName} {
+		err := os.Remove(filepath.Join(dir, name))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return localCode("copy_incomplete", "temporary copy could not be removed")
+		}
+		removed = true
+	}
+	if !removed {
+		return nil
+	}
+	return syncDir(dir)
+}
+
+func ticketHashes(configDir, prefix string) ([]string, error) {
+	root := filepath.Join(configDir, pairFolderName)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, localCode("copy_incomplete", "no complete copy is available")
+	}
+	var hashes []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || !strings.HasPrefix(name, "ticket-") {
+			continue
+		}
+		hashHex := strings.TrimPrefix(name, "ticket-")
+		if len(hashHex) != sha256.Size*2 || !isHexString(hashHex) {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(hashHex, prefix) {
+			continue
+		}
+		if !hasPlaintext(filepath.Join(root, name)) {
+			continue
+		}
+		hashes = append(hashes, hashHex)
+	}
+	return hashes, nil
 }
 
 func matchingTickets(configDir, ticketPrefix string) ([]ticketMatch, error) {
@@ -436,15 +644,25 @@ func saveJournal(dir string, record journal) error {
 	if err != nil {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}
+	// The partial is truncated and removed if its write fails. A keep has to
+	// be on the installed journal before that, or stop still sees a temporary copy.
+	if err := preserveKeep(dir, record, raw); err != nil {
+		return err
+	}
 	partial := filepath.Join(dir, journalPartialName)
-	if err := writeUnsynced(partial, raw); err != nil {
+	if err := writeJournalPartial(partial, raw); err != nil {
 		return err
 	}
 	if err := syncPath(partial); err != nil {
 		return err
 	}
 	final := filepath.Join(dir, journalFileName)
-	if err := replaceFile(partial, final); err != nil {
+	if err := installJournalFile(partial, final); err != nil {
+		return localCode("copy_incomplete", "copy could not be saved")
+	}
+	// The installed journal is now authoritative. A leftover journal.next must
+	// not keep a later temporary copy.
+	if err := os.Remove(filepath.Join(dir, journalNextName)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return localCode("copy_incomplete", "copy could not be saved")
 	}
 	if err := restrictFile(final); err != nil {
@@ -482,6 +700,56 @@ func marshalJournal(record journal) ([]byte, error) {
 		return nil, errors.New("observed")
 	}
 	return json.Marshal(record)
+}
+
+// installJournalFile moves a synced journal partial into place.
+// A failed install leaves that partial on disk. Tests replace this.
+var installJournalFile = replaceFile
+
+// writeJournalPartial writes the unsynced journal partial. Tests replace this.
+var writeJournalPartial = writeUnsynced
+
+// replaceKeepJournal installs a synced journal.next onto journal. Tests replace this.
+var replaceKeepJournal = replaceFile
+
+// preserveKeep installs a keep record before journal.partial is opened.
+// An expiry write that fails before that partial survives must still leave
+// the plaintext in place for proxy stop.
+func preserveKeep(dir string, record journal, raw []byte) error {
+	if keepCopy(record) {
+		return installKeepJournal(dir, raw)
+	}
+	kept, err := partialKeeps(dir)
+	if err != nil || !kept {
+		return err
+	}
+	body, err := os.ReadFile(filepath.Join(dir, journalPartialName))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return localCode("copy_incomplete", "copy could not be saved")
+	}
+	return installKeepJournal(dir, body)
+}
+
+func installKeepJournal(dir string, raw []byte) error {
+	next := filepath.Join(dir, journalNextName)
+	if err := writeUnsynced(next, raw); err != nil {
+		return err
+	}
+	if err := syncPath(next); err != nil {
+		_ = os.Remove(next)
+		return err
+	}
+	final := filepath.Join(dir, journalFileName)
+	if err := replaceKeepJournal(next, final); err != nil {
+		return localCode("copy_incomplete", "copy could not be saved")
+	}
+	if err := restrictFile(final); err != nil {
+		return err
+	}
+	return syncDir(dir)
 }
 
 func replaceFile(partial, final string) error {

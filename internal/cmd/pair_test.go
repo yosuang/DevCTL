@@ -28,6 +28,9 @@ func TestPairCommandsLeaveRootLoggingHook(t *testing.T) {
 	if root.PersistentPreRunE == nil {
 		t.Fatal("root hook")
 	}
+	if commandByName(root, "receive").Flags().Lookup("save-dir") == nil {
+		t.Fatal("save-dir")
+	}
 
 	prevDir := cfg.ConfigDir
 	prevDebug := cfg.Debug
