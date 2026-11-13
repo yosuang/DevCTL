@@ -162,7 +162,7 @@ func TestTakeoverDeliveredOnlyAfterConsumed(t *testing.T) {
 		t.Fatal("path")
 	}
 	record, ok := copyReady(ticket, hash)
-	if !ok || record.Phase != phaseDelivered {
+	if !ok || record.Phase != phaseDelivered || record.Saved {
 		t.Fatal("consumed was not delivered")
 	}
 	if _, err := os.Stat(filepath.Join(ticket, copyFileName)); err != nil {
@@ -203,7 +203,7 @@ func TestTakeoverExpiryKeepsFileAndIsNotDelivered(t *testing.T) {
 				t.Fatal("path")
 			}
 			record, ok := copyReady(ticket, hash)
-			if !ok || record.Phase != phaseCopyComplete || record.Observed != state {
+			if !ok || record.Phase != phaseCopyComplete || record.Observed != state || !record.Saved {
 				t.Fatal("server outcome was stored as delivered")
 			}
 			raw, err := os.ReadFile(filepath.Join(ticket, journalFileName))
@@ -237,13 +237,46 @@ func TestTakeoverExpiryKeepsFileAndIsNotDelivered(t *testing.T) {
 				t.Fatalf("retry: code %s pass %d acks %d", codeOf(err), prompt.passCalls, acks)
 			}
 			record, ok = copyReady(ticket, hash)
-			if !ok || record.Phase != phaseCopyComplete || record.Observed != state {
+			if !ok || record.Phase != phaseCopyComplete || record.Observed != state || !record.Saved {
 				t.Fatal("retry marked the copy delivered")
 			}
 			if _, err := os.Stat(filepath.Join(ticket, copyFileName)); err != nil || mustStat(t, saveFile) {
 				t.Fatal("retry deleted a copy")
 			}
 		})
+	}
+}
+
+func TestExplicitSaveSurvivesConsumed(t *testing.T) {
+	// #given a save directory
+	// #when the copy is stored and the server reports consumed
+	// #then the ticket journal is marked saved and the extra file is separate
+	useFastKDF(t)
+	config := t.TempDir()
+	save := t.TempDir()
+	hash := exampleTicketHash(0x33)
+	env := sealFast(t, hash)
+	prompt := &recordingPrompt{pass: examplePassphrase}
+	if err := receiveCopy(config, save, prompt, hash, env, func([]byte) (string, error) {
+		return "consumed", nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ticket, err := ticketPath(config, hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, ok := copyReady(ticket, hash)
+	if !ok || record.Phase != phaseDelivered || !record.Saved {
+		t.Fatal("explicit save was dropped")
+	}
+	saveFile := filepath.Join(save, "ticket-"+hex.EncodeToString(hash))
+	if _, err := os.Stat(saveFile); err != nil {
+		t.Fatal("explicit save is missing")
+	}
+	same, err := samePath(filepath.Join(ticket, copyFileName), saveFile)
+	if err != nil || same {
+		t.Fatal("save shares the ticket file")
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 
@@ -47,6 +48,7 @@ func local(code, text string) error {
 // Start runs the local core for one taken-over URI.
 // It prints listening after 127.0.0.1 accepts a connection.
 // It does not print ready. A crashed core stays stopped until the next Start.
+// A still-running core is adopted. Adoption does not mark the temporary copy saved.
 func Start(ctx context.Context, configDir, ticketPrefix, corePath string) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -103,8 +105,10 @@ func Start(ctx context.Context, configDir, ticketPrefix, corePath string) error 
 	return nil
 }
 
-// Stop signals the core for one ticket and deletes that runtime directory.
-// It leaves the taken-over copy in place. It does not revoke server credentials.
+// Stop signals the core for one ticket, deletes that runtime directory,
+// and deletes that ticket's temporary plaintext.
+// An explicit save, or a server expiry or cancel after takeover, keeps the plaintext.
+// Stop does not revoke server credentials.
 func Stop(ctx context.Context, configDir, ticketPrefix string) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -124,12 +128,21 @@ func Stop(ctx context.Context, configDir, ticketPrefix string) error {
 		return local("ticket_ambiguous", "more than one ticket matches")
 	}
 	if len(dirs) == 1 {
+		hash, ok := parseRuntimeName(filepath.Base(dirs[0]))
+		if !ok {
+			return errProcessMatch
+		}
 		if err := stopOne(ctx, configDir, dirs[0]); err != nil {
+			return err
+		}
+		if err := pair.ReleaseTemporary(configDir, hash); err != nil {
 			return err
 		}
 		if err := writeUser("stopped\n"); err != nil {
 			return err
 		}
+	} else if err := pair.ReleaseTemporary(configDir, prefix); err != nil {
+		return err
 	}
 	return writeUser(credentialNotice)
 }

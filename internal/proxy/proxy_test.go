@@ -411,17 +411,16 @@ func TestExitCoreIsNotListening(t *testing.T) {
 	}
 }
 
-func TestStartListensAndStopKeepsCopy(t *testing.T) {
-	// #given one complete copy and a core that accepts loopback
-	// #when start runs and then stop runs
-	// #then the port accepted a connection, the copy remains, and the core is gone
+func TestStartListensAndStopDeletesTemporaryCopy(t *testing.T) {
+	// #given one temporary copy and a core that accepts loopback
+	// #when start runs again before stop
+	// #then the owned process is recovered, the copy is not marked saved, and stop deletes the plaintext
 	dir := t.TempDir()
 	keep(t, dir)
 	useCore(t, "listen")
 	t.Setenv("CLASH_OVERRIDE_EXTERNAL_CONTROLLER", "0.0.0.0:9090")
 	t.Setenv("CLASH_OVERRIDE_SECRET", "controller-secret")
 	copyDir := plantCopy(t, dir, 0x11, "copy_complete", "", exampleURI)
-	save := plantSave(t, dir, 0x11)
 	journal := readFile(t, filepath.Join(copyDir, "journal"))
 	logs := captureLog(t)
 	out, err := callStart(t, dir, "", corePath)
@@ -460,14 +459,147 @@ func TestStartListensAndStopKeepsCopy(t *testing.T) {
 	if _, statErr := os.Stat(runtimeDir(dir, 0x11)); !os.IsNotExist(statErr) {
 		t.Fatal("runtime remains")
 	}
-	if !bytes.Equal(readFile(t, filepath.Join(copyDir, "copy")), []byte(exampleURI)) {
-		t.Fatal("copy")
+	if _, statErr := os.Stat(filepath.Join(copyDir, "copy")); !os.IsNotExist(statErr) {
+		t.Fatal("temporary plaintext remains")
 	}
-	if !bytes.Equal(readFile(t, save), []byte(exampleURI)) {
-		t.Fatal("save")
+	if bytes.Contains(readFile(t, filepath.Join(copyDir, "journal")), []byte(`"saved"`)) {
+		t.Fatal("temporary copy was marked saved")
 	}
 	if processAlive(pid) {
 		t.Fatal("process")
+	}
+}
+
+func TestStopDeletesTemporaryPlaintext(t *testing.T) {
+	// #given a temporary takeover copy
+	// #when stop runs
+	// #then that plaintext is deleted and another ticket is left in place
+	for _, phase := range []string{"copy_complete", "delivered"} {
+		t.Run(phase, func(t *testing.T) {
+			dir := t.TempDir()
+			copyDir := plantCopy(t, dir, 0x11, phase, "", exampleURI)
+			if err := os.WriteFile(filepath.Join(copyDir, "copy.partial"), []byte(exampleURI), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			other := plantCopy(t, dir, 0x22, phase, "", exampleURI)
+			plantRuntime(t, dir, 0x11)
+			out, err := callStop(t, dir, "")
+			if err != nil || out != "stopped\n"+credentialNotice {
+				t.Fatalf("stop %v %q", err, out)
+			}
+			if _, statErr := os.Stat(filepath.Join(copyDir, "copy")); !os.IsNotExist(statErr) {
+				t.Fatal("plaintext remains")
+			}
+			if _, statErr := os.Stat(filepath.Join(copyDir, "copy.partial")); !os.IsNotExist(statErr) {
+				t.Fatal("partial remains")
+			}
+			if !bytes.Equal(readFile(t, filepath.Join(other, "copy")), []byte(exampleURI)) {
+				t.Fatal("other ticket")
+			}
+			if _, statErr := os.Stat(runtimeDir(dir, 0x11)); !os.IsNotExist(statErr) {
+				t.Fatal("runtime remains")
+			}
+		})
+	}
+
+	t.Run("no runtime", func(t *testing.T) {
+		dir := t.TempDir()
+		copyDir := plantCopy(t, dir, 0x11, "delivered", "", exampleURI)
+		out, err := callStop(t, dir, "")
+		if err != nil || out != credentialNotice {
+			t.Fatalf("stop %v %q", err, out)
+		}
+		if _, statErr := os.Stat(filepath.Join(copyDir, "copy")); !os.IsNotExist(statErr) {
+			t.Fatal("plaintext remains")
+		}
+	})
+
+	t.Run("saved neighbor", func(t *testing.T) {
+		dir := t.TempDir()
+		temporary := plantCopy(t, dir, 0x11, "delivered", "", exampleURI)
+		saved := plantCustody(t, dir, 0x22, "delivered", "", true, exampleURI)
+		out, err := callStop(t, dir, "")
+		if err != nil || out != credentialNotice {
+			t.Fatalf("stop %v %q", err, out)
+		}
+		if _, statErr := os.Stat(filepath.Join(temporary, "copy")); !os.IsNotExist(statErr) {
+			t.Fatal("temporary remains")
+		}
+		if !bytes.Equal(readFile(t, filepath.Join(saved, "copy")), []byte(exampleURI)) {
+			t.Fatal("saved neighbor")
+		}
+	})
+
+	t.Run("ambiguous", func(t *testing.T) {
+		dir := t.TempDir()
+		left := plantCopy(t, dir, 0x11, "delivered", "", exampleURI)
+		right := plantCopy(t, dir, 0x22, "delivered", "", exampleURI)
+		out, err := callStop(t, dir, "")
+		if codeOf(err) != "ticket_ambiguous" || out != "" {
+			t.Fatalf("stop %v %q", err, out)
+		}
+		if _, statErr := os.Stat(filepath.Join(left, "copy")); statErr != nil {
+			t.Fatal("left")
+		}
+		if _, statErr := os.Stat(filepath.Join(right, "copy")); statErr != nil {
+			t.Fatal("right")
+		}
+	})
+}
+
+func TestStopKeepsExplicitSave(t *testing.T) {
+	// #given a takeover copy the user explicitly saved
+	// #when stop runs
+	// #then the plaintext stays and the runtime directory is removed
+	dir := t.TempDir()
+	copyDir := plantCustody(t, dir, 0x11, "delivered", "", true, exampleURI)
+	save := plantSave(t, dir, 0x11)
+	plantRuntime(t, dir, 0x11)
+	out, err := callStop(t, dir, "")
+	if err != nil || out != "stopped\n"+credentialNotice {
+		t.Fatalf("stop %v %q", err, out)
+	}
+	if !bytes.Equal(readFile(t, filepath.Join(copyDir, "copy")), []byte(exampleURI)) {
+		t.Fatal("saved copy")
+	}
+	if !bytes.Equal(readFile(t, save), []byte(exampleURI)) {
+		t.Fatal("save file")
+	}
+	if !bytes.Contains(readFile(t, filepath.Join(copyDir, "journal")), []byte(`"saved":true`)) {
+		t.Fatal("saved flag")
+	}
+	if _, statErr := os.Stat(runtimeDir(dir, 0x11)); !os.IsNotExist(statErr) {
+		t.Fatal("runtime remains")
+	}
+}
+
+func TestStopKeepsCopyAfterExpiryOrCancel(t *testing.T) {
+	// #given a complete copy whose server ticket expired or was cancelled
+	// #when stop runs
+	// #then the plaintext stays and the copy is not marked saved or delivered
+	for _, state := range []string{"expired", "cancelled"} {
+		t.Run(state, func(t *testing.T) {
+			dir := t.TempDir()
+			copyDir := plantCopy(t, dir, 0x11, "copy_complete", state, exampleURI)
+			journal := readFile(t, filepath.Join(copyDir, "journal"))
+			plantRuntime(t, dir, 0x11)
+			out, err := callStop(t, dir, "")
+			if err != nil || out != "stopped\n"+credentialNotice {
+				t.Fatalf("stop %v %q", err, out)
+			}
+			if !bytes.Equal(readFile(t, filepath.Join(copyDir, "copy")), []byte(exampleURI)) {
+				t.Fatal("copy")
+			}
+			if !bytes.Equal(readFile(t, filepath.Join(copyDir, "journal")), journal) {
+				t.Fatal("journal")
+			}
+			if bytes.Contains(journal, []byte(`"phase":"delivered"`)) || bytes.Contains(journal, []byte(`"saved"`)) {
+				t.Fatal("treated as saved")
+			}
+			if _, statErr := os.Stat(runtimeDir(dir, 0x11)); !os.IsNotExist(statErr) {
+				t.Fatal("runtime remains")
+			}
+		})
 	}
 }
 
@@ -950,6 +1082,11 @@ func readReport(t *testing.T) coreReport {
 
 func plantCopy(t *testing.T, configDir string, fill byte, phase, observed, uri string) string {
 	t.Helper()
+	return plantCustody(t, configDir, fill, phase, observed, false, uri)
+}
+
+func plantCustody(t *testing.T, configDir string, fill byte, phase, observed string, saved bool, uri string) string {
+	t.Helper()
 	hash := hashHex(fill)
 	dir := filepath.Join(configDir, "pair", "ticket-"+hash)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -966,6 +1103,7 @@ func plantCopy(t *testing.T, configDir string, fill byte, phase, observed, uri s
 		EnvelopeHash: hex.EncodeToString(env[:]),
 		CopyHash:     hex.EncodeToString(sum[:]),
 		Observed:     observed,
+		Saved:        saved,
 	}
 	raw, err := json.Marshal(record)
 	if err != nil {
@@ -995,6 +1133,18 @@ type plantedJournal struct {
 	EnvelopeHash string `json:"envelope_hash"`
 	CopyHash     string `json:"copy_hash"`
 	Observed     string `json:"observed,omitempty"`
+	Saved        bool   `json:"saved,omitempty"`
+}
+
+func plantRuntime(t *testing.T, configDir string, fill byte) {
+	t.Helper()
+	dir := runtimeDir(configDir, fill)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pid"), []byte("0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func hashHex(fill byte) string {

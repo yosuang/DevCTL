@@ -57,6 +57,8 @@ func TestRealCoreObservation(t *testing.T) {
 	assertSameBytes(t, filepath.Join(copyDir, "journal"), journal)
 	stopOwned(t, dir, copyDir, uri, journal, first.pid, first.addr)
 
+	copyDir = plantCopy(t, dir, 0x11, "copy_complete", "", uri)
+	journal = readFile(t, filepath.Join(copyDir, "journal"))
 	second := observeSession(t, dir, core, work, upstreamPort, pin, origin)
 	if second.pid == first.pid || processAlive(first.pid) {
 		t.Fatalf("recovery pid %d", second.pid)
@@ -114,7 +116,9 @@ func stopOwned(t *testing.T, dir, copyDir, uri string, journal []byte, pid int, 
 	if _, statErr := os.Stat(runtimeDir(dir, 0x11)); !os.IsNotExist(statErr) {
 		t.Fatal("runtime remains")
 	}
-	assertSameBytes(t, filepath.Join(copyDir, "copy"), []byte(uri))
+	if _, statErr := os.Stat(filepath.Join(copyDir, "copy")); !os.IsNotExist(statErr) {
+		t.Fatal("temporary plaintext remains")
+	}
 	assertSameBytes(t, filepath.Join(copyDir, "journal"), journal)
 }
 
