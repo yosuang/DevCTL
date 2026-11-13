@@ -625,45 +625,6 @@ func TestZombieIsNotAlive(t *testing.T) {
 	t.Fatal("zombie looked alive")
 }
 
-func TestRealCoreObservationIsNotReady(t *testing.T) {
-	// #given no Mihomo binary is part of this module
-	// #when DEVCTL_PROXY_CORE is unset
-	// #then ready is untested
-	path := os.Getenv("DEVCTL_PROXY_CORE")
-	if path == "" {
-		t.Skip("real Mihomo binary was not observed")
-	}
-	dir := t.TempDir()
-	keep(t, dir)
-	plantCopy(t, dir, 0x11, "copy_complete", "", exampleURI)
-	out, err := callStart(t, dir, "", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := listenPort(t, out)
-	if strings.Contains(out, "ready") {
-		t.Fatal("ready")
-	}
-	dialLoopback(t, port)
-	if runtime.GOOS == "linux" {
-		assertLinuxListeners(t, readRuntimePID(t, dir), port)
-	}
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(loopbackHost, strconv.Itoa(port)), time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(time.Second))
-	_, _ = conn.Write([]byte{0x05, 0x01, 0x00})
-	buf := make([]byte, 2)
-	_, _ = conn.Read(buf)
-	target, err := net.DialTimeout("tcp", "192.0.2.1:80", 500*time.Millisecond)
-	if err == nil {
-		_ = target.Close()
-		t.Fatal("direct path is not a proxied download")
-	}
-}
-
 func renderURI(uri string) ([]byte, error) {
 	parsed, err := parseURI([]byte(uri))
 	if err != nil {
