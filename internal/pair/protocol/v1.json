@@ -151,6 +151,7 @@
     "salt_bytes": 16,
     "key_bytes": 32,
     "aead": "aes-256-gcm",
+    "encoding": "base64url",
     "nonce_bytes": 12,
     "tag_bytes": 16,
     "fields": ["v", "kdf", "m", "t", "p", "salt", "aead", "nonce", "ct"],

@@ -59,6 +59,7 @@ it("publishes one vocabulary for states, errors, envelopes, and signature order"
     salt_bytes: 16,
     key_bytes: 32,
     aead: "aes-256-gcm",
+    encoding: "base64url",
     nonce_bytes: 12,
     tag_bytes: 16,
     max_bytes: 65536,
