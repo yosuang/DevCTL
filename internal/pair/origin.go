@@ -58,7 +58,9 @@ func parseCoordinator(raw string) (*url.URL, string, error) {
 }
 
 // canonicalHost returns the host a URL parser will put in request.url.
-// DNS names are lowercased and converted to punycode. IP addresses are not.
+// DNS names are lowercased and converted to punycode.
+// IP addresses use net.IP.String, which drops leading zeros and compresses
+// the longest run of zero groups. That is the host the signature covers.
 func canonicalHost(host string) (string, error) {
 	if host == "" {
 		return "", serverCode("bad_request", "coordinator url is not allowed")
@@ -68,10 +70,7 @@ func canonicalHost(host string) (string, error) {
 		return "", serverCode("bad_request", "coordinator url is not allowed")
 	}
 	if ip := net.ParseIP(unescaped); ip != nil {
-		if ip.To4() != nil {
-			return ip.String(), nil
-		}
-		return strings.ToLower(unescaped), nil
+		return ip.String(), nil
 	}
 	ascii, err := coordinatorIDNA.ToASCII(unescaped)
 	if err != nil || ascii == "" {

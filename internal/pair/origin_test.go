@@ -26,6 +26,27 @@ func TestSignedOriginUsesURLHost(t *testing.T) {
 	}
 }
 
+func TestSignedIPv6OriginUsesCompressedHost(t *testing.T) {
+	// #given an IPv6 coordinator URL with a leading zero or an expanded loopback
+	// #when the client builds the signed origin
+	// #then the host is the compressed URL form and the port is explicit
+	cases := []struct {
+		raw    string
+		origin string
+	}{
+		{raw: "https://[2001:0db8::1]", origin: "https://[2001:db8::1]:443"},
+		{raw: "https://[0:0:0:0:0:0:0:1]", origin: "https://[::1]:443"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			base, origin, err := parseCoordinator(tc.raw)
+			if err != nil || origin != tc.origin || base.String() != origin {
+				t.Fatalf("origin %q base %v err %v", origin, base, err)
+			}
+		})
+	}
+}
+
 func TestParseCoordinator(t *testing.T) {
 	cases := []struct {
 		raw    string
