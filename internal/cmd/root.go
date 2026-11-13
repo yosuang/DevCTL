@@ -4,16 +4,12 @@ import (
 	"devctl/internal/build"
 	"devctl/internal/config"
 	"devctl/internal/logging"
-	"devctl/pkg/cmdutil"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 
-	"github.com/MakeNowJust/heredoc"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var cfg = config.Init()
@@ -24,11 +20,12 @@ func init() {
 
 func NewCmdRoot() (*cobra.Command, error) {
 	cmd := &cobra.Command{
-		Use:          "devctl <command> <subcommand> [flags]",
+		Use:          "devctl",
 		Short:        "Development CLI",
-		Long:         `Development CLI`,
+		Long:         "Development CLI",
 		Version:      build.FormatVersion(),
 		SilenceUsage: true,
+		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
@@ -38,32 +35,16 @@ func NewCmdRoot() (*cobra.Command, error) {
 		},
 	}
 
-	cmd.AddGroup(
-		&cobra.Group{ID: "core", Title: "Core Commands:"},
-		&cobra.Group{ID: "hidden", Title: ""},
-	)
+	cmd.AddGroup(&cobra.Group{ID: "hidden", Title: ""})
 	cmd.SetHelpCommandGroupID("hidden")
 	cmd.SetCompletionCommandGroupID("hidden")
 
 	cfg.AddFlags(cmd.PersistentFlags())
 
-	cmd.SetFlagErrorFunc(rootFlagErrorFunc)
 	cmd.SetVersionTemplate("{{.Version}}\n")
 	cmd.SetUsageTemplate(usageTemplate)
 
-	cmd.AddCommand(NewCmdKit(cfg))
-	cmd.AddCommand(NewCmdVault(cfg))
-	cmd.AddCommand(NewCmdConfig(cfg))
-	cmd.AddCommand(NewCmdSync(cfg))
-
 	return cmd, nil
-}
-
-func rootFlagErrorFunc(_ *cobra.Command, err error) error {
-	if errors.Is(err, pflag.ErrHelp) {
-		return err
-	}
-	return cmdutil.FlagErrorWrap(err)
 }
 
 func setupLogging(cfg *config.Config) {
@@ -84,12 +65,7 @@ func setupLogging(cfg *config.Config) {
 	slog.SetDefault(logger)
 }
 
-type CommandError struct {
-	error
-	ExitCode int
-}
-
-var usageTemplate = heredoc.Docf(`Usage:{{if .Runnable}}
+var usageTemplate = `Usage:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if gt (len .Aliases) 0}}
 
 Aliases:
@@ -111,8 +87,5 @@ Global Flags:
 {{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
 
 Additional Help Topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
-  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
-
-
-Use %[1]sdevctl <command> <subcommand> --help%[1]s for more information about a command.{{end}}
-`, "`")
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}
+`
