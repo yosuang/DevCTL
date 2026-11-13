@@ -1,0 +1,39 @@
+name: Coordinator
+
+on:
+  push:
+    paths:
+      - "coordinator/**"
+      - "internal/pair/protocol/v1.json"
+      - ".github/workflows/coordinator.yml"
+  pull_request:
+    paths:
+      - "coordinator/**"
+      - "internal/pair/protocol/v1.json"
+      - ".github/workflows/coordinator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: coordinator
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: coordinator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: coordinator/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test

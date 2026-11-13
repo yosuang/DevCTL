@@ -17,5 +17,10 @@
 /script/build
 /script/build.exe
 
+# Coordinator toolchain
+/coordinator/node_modules/
+/coordinator/.wrangler/
+/coordinator/worker-configuration.d.ts
+
 # MacOS
 .DS_Store

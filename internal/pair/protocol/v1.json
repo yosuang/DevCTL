@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "states": ["open", "bound", "consumed", "expired", "cancelled"],
+  "terminal_states": ["consumed", "expired", "cancelled"],
+  "hint_states": ["bound", "expired", "cancelled"],
+  "session_states": ["active", "expired"],
+  "errors": {
+    "server": [
+      "bad_request",
+      "confirm_required",
+      "unauthorized",
+      "forbidden",
+      "ticket_not_found",
+      "session_not_found",
+      "ticket_bound",
+      "ticket_not_bound",
+      "consumed",
+      "expired",
+      "cancelled",
+      "payload_gone",
+      "bound_notify_pending",
+      "too_large",
+      "unsupported_version",
+      "rate_limited",
+      "conflict"
+    ],
+    "local": [
+      "passphrase_rejected",
+      "uri_invalid",
+      "uri_unsupported",
+      "not_a_tty",
+      "ack_pending",
+      "copy_incomplete",
+      "ticket_ambiguous",
+      "core_missing"
+    ]
+  },
+  "error_status": {
+    "bad_request": 400,
+    "confirm_required": 400,
+    "unauthorized": 401,
+    "forbidden": 403,
+    "ticket_not_found": 404,
+    "session_not_found": 404,
+    "ticket_bound": 409,
+    "ticket_not_bound": 409,
+    "consumed": 409,
+    "expired": 410,
+    "cancelled": 410,
+    "payload_gone": 410,
+    "bound_notify_pending": 200,
+    "too_large": 413,
+    "unsupported_version": 400,
+    "rate_limited": 429,
+    "conflict": 409
+  },
+  "http": {
+    "cache_control": "no-store",
+    "method_not_allowed": 405,
+    "success": 200
+  },
+  "routes": {
+    "page": "/p",
+    "session_socket": "/v1/sessions/socket",
+    "session_challenge": "/v1/sessions/challenge",
+    "session_hello": "/v1/sessions/hello",
+    "session_preview": "/v1/sessions/preview",
+    "session_wait": "/v1/sessions/wait",
+    "tickets": "/v1/tickets",
+    "ticket_challenge": "/v1/tickets/challenge",
+    "ticket_preview": "/v1/tickets/preview",
+    "ticket_confirm": "/v1/tickets/confirm",
+    "ticket_status": "/v1/tickets/status",
+    "ticket_cancel": "/v1/tickets/cancel",
+    "ticket_read": "/v1/tickets/read",
+    "ticket_ack": "/v1/tickets/ack"
+  },
+  "bodies": {
+    "create": ["v", "ticket", "issuer_capability", "envelope"],
+    "ticket_preview": ["v", "ticket"],
+    "ticket_challenge": ["v", "ticket_hash", "purpose"],
+    "ticket_challenge_redeem": ["v", "ticket_hash", "purpose", "pubkey", "signature"],
+    "confirm": ["v", "ticket", "session_capability", "confirm", "nonce", "digest"],
+    "status": ["v", "ticket", "issuer_capability"],
+    "cancel": ["v", "ticket", "issuer_capability", "nonce", "digest"],
+    "read": ["v", "ticket_hash", "pubkey", "nonce", "counter", "signature"],
+    "ack": ["v", "ticket_hash", "pubkey", "nonce", "counter", "signature"],
+    "session_challenge": ["v", "session_capability", "purpose"],
+    "hello": ["v", "session_capability", "pubkey", "nonce", "signature"],
+    "session_preview": ["v", "session_capability"],
+    "wait": ["v", "session_capability", "pubkey", "nonce", "counter", "signature"]
+  },
+  "page_fields": ["v", "state", "fingerprint", "expires_at", "error"],
+  "session_preview_fields": ["v", "fingerprint", "pubkey"],
+  "hint_fields": ["v", "state", "ticket_hash", "seed_nonce", "expires_at"],
+  "read_fields": ["v", "state", "envelope", "expires_at"],
+  "ws_messages": ["hello", "challenge", "hello_proof", "hint"],
+  "ws_auto_ping": "ping",
+  "ws_auto_pong": "pong",
+  "session_header": "Devctl-Session-Hash",
+  "hash": "SHA-256",
+  "capability_bytes": 32,
+  "nonce_bytes": 32,
+  "pubkey_bytes": 32,
+  "counter_bytes": 8,
+  "counter_encoding": "uint64be",
+  "challenge_purposes": ["confirm", "cancel", "op"],
+  "confirm_nonce_cap": 8,
+  "confirm_marker": "0x01",
+  "fingerprint": {
+    "bytes": 8,
+    "group_hex": 4,
+    "separator": "-"
+  },
+  "limits": {
+    "source_admits_per_window": 3,
+    "window_ms": 300000,
+    "shard_count": 16,
+    "shard_admits_per_window": 4,
+    "grant_ttl_ms": 60000,
+    "ticket_ttl_ms": 300000,
+    "session_ttl_ms": 300000,
+    "envelope_max_bytes": 65536,
+    "request_max_bytes": 73728,
+    "wait_timeout_ms": 20000
+  },
+  "local_source": "source:local",
+  "uri_schemes": ["hysteria2", "hy2"],
+  "passphrase_min_codepoints": 12,
+  "qr": {
+    "session_fragment_parameter": "sc",
+    "ticket_prefix": "dct1."
+  },
+  "browser_forbidden_identifiers": [
+    "read",
+    "ack",
+    "decrypt",
+    "passphrase",
+    "ciphertext",
+    "ct",
+    "argon2id",
+    "privateKey"
+  ],
+  "envelope": {
+    "name": "devctl-pair-v1",
+    "kdf": "argon2id",
+    "kdf_version": "0x13",
+    "m": 65536,
+    "t": 3,
+    "p": 4,
+    "salt_bytes": 16,
+    "key_bytes": 32,
+    "aead": "aes-256-gcm",
+    "nonce_bytes": 12,
+    "tag_bytes": 16,
+    "fields": ["v", "kdf", "m", "t", "p", "salt", "aead", "nonce", "ct"],
+    "aad": ["ascii:devctl-pair-v1", "0x00", "ticket_hash:32", "salt:16"],
+    "max_bytes": 65536
+  },
+  "signatures": {
+    "hello": {
+      "scope": "devctl-pair/hello/v1",
+      "sign_fields": ["scope", "0x00", "server_nonce", "receiver_pubkey", "session_hash", "request_digest"],
+      "digest_fields": ["origin", "0x00", "session_hash", "pubkey"]
+    },
+    "read": {
+      "scope": "devctl-pair/read/v1",
+      "method": "POST",
+      "path": "/v1/tickets/read",
+      "sign_fields": ["scope", "0x00", "server_nonce", "ticket_hash", "receiver_pubkey", "counter", "request_digest"],
+      "digest_fields": ["method", "0x00", "path", "0x00", "origin", "0x00", "ticket_hash", "counter"]
+    },
+    "ack": {
+      "scope": "devctl-pair/ack/v1",
+      "method": "POST",
+      "path": "/v1/tickets/ack",
+      "sign_fields": ["scope", "0x00", "server_nonce", "ticket_hash", "receiver_pubkey", "counter", "request_digest"],
+      "digest_fields": ["method", "0x00", "path", "0x00", "origin", "0x00", "ticket_hash", "counter", "envelope_sha256"]
+    },
+    "wait": {
+      "scope": "devctl-pair/wait/v1",
+      "method": "POST",
+      "path": "/v1/sessions/wait",
+      "sign_fields": ["scope", "0x00", "server_nonce", "session_hash", "receiver_pubkey", "counter", "request_digest"],
+      "digest_fields": ["method", "0x00", "path", "0x00", "origin", "0x00", "session_hash", "counter"]
+    },
+    "challenge": {
+      "scope": "devctl-pair/challenge/v1",
+      "method": "POST",
+      "path": "/v1/tickets/challenge",
+      "sign_fields": ["scope", "0x00", "server_nonce", "ticket_hash", "receiver_pubkey", "request_digest"],
+      "digest_fields": ["method", "0x00", "path", "0x00", "origin", "0x00", "ticket_hash"]
+    },
+    "confirm": {
+      "scope": "devctl-pair/confirm/v1",
+      "digest_fields": ["scope", "0x00", "nonce", "session_hash", "ticket_hash", "pubkey", "0x01"]
+    },
+    "cancel": {
+      "scope": "devctl-pair/cancel/v1",
+      "digest_fields": ["scope", "0x00", "nonce", "ticket_hash", "issuer_hash"]
+    }
+  }
+}
