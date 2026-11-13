@@ -2,7 +2,6 @@ package main
 
 import (
 	devctlcmd "devctl/internal/cmd"
-	"errors"
 	"log/slog"
 	"os"
 )
@@ -17,10 +16,6 @@ func main() {
 	}
 
 	if err := cmd.Execute(); err != nil {
-		var cerr *devctlcmd.CommandError
-		if errors.As(err, &cerr) {
-			os.Exit(cerr.ExitCode)
-		}
 		os.Exit(1)
 	}
 }

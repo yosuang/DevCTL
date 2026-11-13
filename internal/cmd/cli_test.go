@@ -188,7 +188,7 @@ func cliEnv(home, configDir string, args []string) []string {
 	return env
 }
 
-func TestDevctlHelper(t *testing.T) {
+func TestDevctlHelper(_ *testing.T) {
 	if os.Getenv("DEVCTL_HELPER") != "1" {
 		return
 	}
@@ -203,10 +203,6 @@ func TestDevctlHelper(t *testing.T) {
 		os.Exit(1)
 	}
 	if err := command.Execute(); err != nil {
-		var cerr *CommandError
-		if errors.As(err, &cerr) {
-			os.Exit(cerr.ExitCode)
-		}
 		os.Exit(1)
 	}
 	os.Exit(0)
