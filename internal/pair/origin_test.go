@@ -2,6 +2,30 @@ package pair
 
 import "testing"
 
+func TestSignedOriginUsesURLHost(t *testing.T) {
+	// #given a coordinator URL whose host is mixed-case or not punycode
+	// #when the client builds the signed origin
+	// #then the host matches URL hostname rules: lowercase, punycode, explicit port
+	cases := []struct {
+		raw    string
+		origin string
+	}{
+		{raw: "https://Pair.Example.com", origin: "https://pair.example.com:443"},
+		{raw: "https://Pair.Example.com:8443", origin: "https://pair.example.com:8443"},
+		{raw: "https://münchen.example", origin: "https://xn--mnchen-3ya.example:443"},
+		{raw: "https://XN--MNCHEN-3YA.example", origin: "https://xn--mnchen-3ya.example:443"},
+		{raw: "http://LocalHost:8787", origin: "http://localhost:8787"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			base, origin, err := parseCoordinator(tc.raw)
+			if err != nil || origin != tc.origin || base.String() != origin {
+				t.Fatalf("origin %q base %v err %v", origin, base, err)
+			}
+		})
+	}
+}
+
 func TestParseCoordinator(t *testing.T) {
 	cases := []struct {
 		raw    string

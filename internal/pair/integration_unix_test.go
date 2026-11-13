@@ -208,6 +208,19 @@ func testDeliverCLI(t *testing.T, origin, bin string) {
 	if issue.wait() != 0 {
 		t.Fatalf("issue exit, stderr %s", issue.stderr.String())
 	}
+	// #given the issuer capability from this upload is on disk
+	// #when pair issue runs again
+	// #then the same dct1. line is reprinted and no second envelope is uploaded
+	var reprinted bytes.Buffer
+	prevOut := userOut
+	userOut = &reprinted
+	t.Cleanup(func() { userOut = prevOut })
+	if err := Issue(ctx, origin, failPrompt{}, issuerDir); err != nil {
+		t.Fatalf("reissue: %v", err)
+	}
+	if reprinted.String() != ticketLine+"\n" {
+		t.Fatal("reissue did not reprint the stored ticket")
+	}
 	ticket, err := b64url.DecodeString(strings.TrimPrefix(ticketLine, "dct1."))
 	if err != nil || len(ticket) != 32 {
 		t.Fatal("ticket text")

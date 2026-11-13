@@ -311,7 +311,12 @@ func (c *coordinator) sessionChallenge(ctx context.Context, rec *receiver, purpo
 	return body.Nonce, nil
 }
 
+// maxWaitCatchup is one step past a full session of waits.
+// The server moves its counter before the response is stored here.
+const maxWaitCatchup = 2048
+
 func (c *coordinator) pollHint(ctx context.Context, rec *receiver) (*hintBody, error) {
+	caughtUp := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, serverCode("bad_request", "coordinator request failed")
@@ -349,13 +354,26 @@ func (c *coordinator) pollHint(ctx context.Context, rec *receiver) (*hintBody, e
 			Counter:   rec.counter,
 			Signature: b64url.EncodeToString(sig),
 		})
+		if codeOfError(err) == "conflict" {
+			// The server already counted a wait this process did not store.
+			// The guess stays in memory until a wait is accepted, so a miss
+			// does not leave the saved counter ahead of the server.
+			caughtUp++
+			if caughtUp > maxWaitCatchup || rec.counter == ^uint64(0) {
+				return nil, err
+			}
+			rec.counter++
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
-		rec.counter++
-		if err := saveCounter(rec); err != nil {
-			return nil, err
+		caughtUp = 0
+		if rec.counter == ^uint64(0) {
+			return nil, serverCode("conflict", "coordinator request failed")
 		}
+		rec.counter++
+		_ = saveCounter(rec)
 		if body.Hint != nil && body.Hint.State != "" {
 			return body.Hint, nil
 		}
@@ -374,38 +392,49 @@ func (c *coordinator) readEnvelope(ctx context.Context, rec *receiver, ticketHas
 	if !ok {
 		counter = 0
 	}
-	var nonce string
-	var err error
-	if seed != "" && counter == 0 {
-		nonce, err = c.redeem(ctx, rec, ticketHash, seed)
-		if err != nil {
-			if codeOfError(err) == "unauthorized" {
-				nonce, err = c.opNonce(ctx, ticketHash)
-			}
-			if err != nil {
-				return nil, "", err
-			}
-		}
-	} else {
-		nonce, err = c.opNonce(ctx, ticketHash)
+	// A lost save leaves the server one read ahead. One step covers that gap.
+	for step := 0; step < 2; step++ {
+		nonce, err := c.nonceForRead(ctx, rec, ticketHash, seed, counter)
 		if err != nil {
 			return nil, "", err
 		}
+		body, err := c.signedTicket(ctx, "read", wireSpec.Routes.TicketRead, rec, ticketHash, nonce, counter, nil)
+		if codeOfError(err) == "conflict" && step == 0 && counter != ^uint64(0) {
+			counter++
+			continue
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if terminalState(body.State) && body.Envelope == "" {
+			return nil, body.State, nil
+		}
+		if body.State != "bound" || body.Envelope == "" {
+			return nil, "", serverCode("bad_request", "coordinator request failed")
+		}
+		if err := saveReadOp(rec, ticketHash, counter+1); err != nil {
+			return nil, "", err
+		}
+		return []byte(body.Envelope), body.State, nil
 	}
-	body, err := c.signedTicket(ctx, "read", wireSpec.Routes.TicketRead, rec, ticketHash, nonce, counter, nil)
-	if err != nil {
-		return nil, "", err
+	return nil, "", serverCode("conflict", "coordinator request failed")
+}
+
+// nonceForRead redeems a hint seed only for the first read.
+// bad_request means the seed was already spent and the hint was not cleared.
+// The ticket can still be bound, so the next step is an op nonce.
+func (c *coordinator) nonceForRead(ctx context.Context, rec *receiver, ticketHash []byte, seed string, counter uint64) (string, error) {
+	if seed != "" && counter == 0 {
+		nonce, err := c.redeem(ctx, rec, ticketHash, seed)
+		if err == nil {
+			return nonce, nil
+		}
+		code := codeOfError(err)
+		if code != "bad_request" && code != "unauthorized" {
+			return "", err
+		}
 	}
-	if terminalState(body.State) && body.Envelope == "" {
-		return nil, body.State, nil
-	}
-	if body.State != "bound" || body.Envelope == "" {
-		return nil, "", serverCode("bad_request", "coordinator request failed")
-	}
-	if err := saveReadOp(rec, ticketHash, counter+1); err != nil {
-		return nil, "", err
-	}
-	return []byte(body.Envelope), body.State, nil
+	return c.opNonce(ctx, ticketHash)
 }
 
 func (c *coordinator) ack(ctx context.Context, rec *receiver, ticketHash, envelopeHash []byte) (string, error) {
@@ -767,11 +796,15 @@ func loadCounter(dir string) (uint64, error) {
 }
 
 func saveReadOp(rec *receiver, ticketHash []byte, next uint64) error {
-	text := hexEncode(ticketHash) + " " + strconv.FormatUint(next, 10)
-	return writeSecretFile(filepath.Join(rec.dir, "read-op"), []byte(text))
+	text := strconv.FormatUint(next, 10)
+	return writeSecretFile(readOpPath(rec, ticketHash), []byte(text))
 }
 
 func loadReadOp(rec *receiver, ticketHash []byte) (uint64, bool) {
+	if counter, ok := readCounterFile(readOpPath(rec, ticketHash)); ok {
+		return counter, true
+	}
+	// Older sessions stored one "hash counter" line for the whole session.
 	raw, err := readTrim(filepath.Join(rec.dir, "read-op"))
 	if err != nil {
 		return 0, false
@@ -780,7 +813,23 @@ func loadReadOp(rec *receiver, ticketHash []byte) (uint64, bool) {
 	if !ok || hashHex != hexEncode(ticketHash) {
 		return 0, false
 	}
-	counter, err := strconv.ParseUint(counterText, 10, 64)
+	counter, convErr := strconv.ParseUint(counterText, 10, 64)
+	if convErr != nil {
+		return 0, false
+	}
+	return counter, true
+}
+
+func readOpPath(rec *receiver, ticketHash []byte) string {
+	return filepath.Join(rec.dir, "read-op-"+hexEncode(ticketHash))
+}
+
+func readCounterFile(path string) (uint64, bool) {
+	raw, err := readTrim(path)
+	if err != nil {
+		return 0, false
+	}
+	counter, err := strconv.ParseUint(string(raw), 10, 64)
 	if err != nil {
 		return 0, false
 	}

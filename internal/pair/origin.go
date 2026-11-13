@@ -5,6 +5,21 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/idna"
+)
+
+// coordinatorIDNA is the URL hostname algorithm the coordinator uses.
+// Labels are lowercase, and Unicode labels are punycode. Transitional
+// mapping is off, matching URL domain-to-ASCII with beStrict false.
+var coordinatorIDNA = idna.New(
+	idna.MapForLookup(),
+	idna.BidiRule(),
+	idna.Transitional(false),
+	idna.VerifyDNSLength(false),
+	idna.StrictDomainName(false),
+	idna.CheckHyphens(false),
+	idna.CheckJoiners(true),
 )
 
 // parseCoordinator checks the coordinator origin.
@@ -21,8 +36,8 @@ func parseCoordinator(raw string) (*url.URL, string, error) {
 	if parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
 		return nil, "", serverCode("bad_request", "coordinator url is not allowed")
 	}
-	host := parsed.Hostname()
-	if host == "" || strings.Contains(host, "%") {
+	host, err := canonicalHost(parsed.Hostname())
+	if err != nil || host == "" || strings.Contains(host, "%") {
 		return nil, "", serverCode("bad_request", "coordinator url is not allowed")
 	}
 	if parsed.Scheme == "http" && !loopbackHost(host) {
@@ -38,16 +53,31 @@ func parseCoordinator(raw string) (*url.URL, string, error) {
 	} else if !allowedPort(port) {
 		return nil, "", serverCode("bad_request", "coordinator url is not allowed")
 	}
-	if strings.Contains(host, ":") {
-		host = "[" + host + "]"
+	base := &url.URL{Scheme: parsed.Scheme, Host: net.JoinHostPort(host, port)}
+	return base, base.String(), nil
+}
+
+// canonicalHost returns the host a URL parser will put in request.url.
+// DNS names are lowercased and converted to punycode. IP addresses are not.
+func canonicalHost(host string) (string, error) {
+	if host == "" {
+		return "", serverCode("bad_request", "coordinator url is not allowed")
 	}
-	origin := parsed.Scheme + "://" + host + ":" + port
-	base := &url.URL{Scheme: parsed.Scheme, Host: net.JoinHostPort(parsed.Hostname(), port)}
-	if base.String() != origin {
-		// JoinHostPort brackets IPv6. The signed origin uses that same host.
-		origin = base.String()
+	unescaped, err := url.PathUnescape(host)
+	if err != nil || strings.Contains(unescaped, "%") {
+		return "", serverCode("bad_request", "coordinator url is not allowed")
 	}
-	return base, origin, nil
+	if ip := net.ParseIP(unescaped); ip != nil {
+		if ip.To4() != nil {
+			return ip.String(), nil
+		}
+		return strings.ToLower(unescaped), nil
+	}
+	ascii, err := coordinatorIDNA.ToASCII(unescaped)
+	if err != nil || ascii == "" {
+		return "", serverCode("bad_request", "coordinator url is not allowed")
+	}
+	return ascii, nil
 }
 
 func loopbackHost(host string) bool {

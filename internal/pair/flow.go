@@ -28,6 +28,20 @@ func Issue(ctx context.Context, coordinator string, prompt Prompter, configDir s
 		return err
 	}
 	defer client.close()
+	records, err := storedIssuers(configDir)
+	if err != nil {
+		return err
+	}
+	if len(records) > 1 {
+		return localCode("ticket_ambiguous", "more than one ticket matches")
+	}
+	if len(records) == 1 {
+		text, err := ticketText(records[0].ticket)
+		if err != nil {
+			return err
+		}
+		return writeUser("%s\n", text)
+	}
 	if prompt == nil {
 		return localCode("not_a_tty", "stdin is not a terminal")
 	}
@@ -288,6 +302,51 @@ func loadReceiver(configDir string) (*receiver, error) {
 		pub:     pub,
 		counter: counter,
 	}, nil
+}
+
+type issuerRecord struct {
+	ticket []byte
+}
+
+// storedIssuers returns issuer capabilities already on disk.
+// A later pair issue reprints that ticket instead of uploading another envelope.
+func storedIssuers(configDir string) ([]issuerRecord, error) {
+	if err := loadWire(); err != nil {
+		return nil, err
+	}
+	root := filepath.Join(configDir, pairFolderName)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, localCode("copy_incomplete", "session material is incomplete")
+	}
+	var records []issuerRecord
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || !strings.HasPrefix(name, "issuer-") {
+			continue
+		}
+		dir := filepath.Join(root, name)
+		capability, capErr := os.ReadFile(filepath.Join(dir, "capability"))
+		if errors.Is(capErr, os.ErrNotExist) {
+			continue
+		}
+		if capErr != nil || len(capability) != wireSpec.CapabilityBytes {
+			return nil, localCode("copy_incomplete", "session material is incomplete")
+		}
+		ticket, ticketErr := os.ReadFile(filepath.Join(dir, "ticket"))
+		if ticketErr != nil || len(ticket) != wireSpec.CapabilityBytes {
+			return nil, localCode("copy_incomplete", "session material is incomplete")
+		}
+		sum := sha256.Sum256(ticket)
+		if name != "issuer-"+hex.EncodeToString(sum[:]) {
+			return nil, localCode("copy_incomplete", "session material is incomplete")
+		}
+		records = append(records, issuerRecord{ticket: append([]byte(nil), ticket...)})
+	}
+	return records, nil
 }
 
 func storeIssuer(configDir string, ticketHash, ticket, capability []byte) error {
