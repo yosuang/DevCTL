@@ -318,7 +318,7 @@ func TestEnvelopeRejectsParametersBeforeKDF(t *testing.T) {
 
 	*called = false
 	got, err = sealEnvelope(examplePassphrase, exampleTicketHash(0x11), []byte("\n"))
-	if *called || codeOf(err) != "uri_invalid" {
+	if got != nil || *called || codeOf(err) != "uri_invalid" {
 		t.Fatalf("empty plaintext: %s called %v", codeOf(err), *called)
 	}
 	assertNoMaterial(t, err)
